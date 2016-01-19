@@ -6,17 +6,19 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <time.h>
 
-#define MAX_CONN_CAPABILITY = 10
+#include "chat_server.h"
+
+#define MAX_CONN_CAPABILITY 10
 
 #define TO 0
 #define FROM 1
 
 int main(int argc, char **argv) {
     int socket_id, socket_client;
-    int *pipes[2] = (int *)malloc(2 * sizeof(int) * MAX_CONN_CAPABILITY);
-
-    int client_counter;
+    connection clients[MAX_CONN_CAPABILITY];
+    for 
     
     socket_id = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -32,4 +34,11 @@ int main(int argc, char **argv) {
 
     socket_client = accept(socket_id, NULL, NULL);
 
+}
+
+/* format_message: a short description
+ * TODO long description
+ */
+char *format_message (char *sender, char *message){
+    
 }

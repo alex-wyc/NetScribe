@@ -1,0 +1,25 @@
+Scenario: Client 1 wants to co-edit a file with client 2
+
+1. Central Server listens on all channels
+2. Client 1 establishes connection with the central server
+3. Central Server forks off a subserver with an unnamed pipe, sends client 1 the address/connection details
+4. client 1 and subserver 1 connect
+5. client 1 sends the file-to-edit to the subserver
+
+-----------------initial stage complete------------------
+
+--------------------the invitation-----------------------
+
+6. client 1 sends a message to subserver to invite client 2
+7. subserver relays this information to main server (which has a list of all connections)
+8. central server gives client 2 the connection information of the subserver
+9. client 2 connects to subserver
+
+
+Message format
+
+<type>!!<author>::<content>
+
+example:
+chat!!Yeech:: hello everyone
+edit!!Yeech:: cl
