@@ -7,18 +7,23 @@
  * Description                                                                 *
  *  Handles Public Channel Communications and requests from each subserver,    *
  *  also in charge of creating subservers and providing them with global       *
- *  informations.
- *
- *  Thorough *
+ *  informations.                                                              *
  *                                                                             *
- ******************************************************************************/
+ *  Handles:                                                                   *
+ *      - Room (subserver) creation                                            *
+ *      - User invitation                                                      *
+ *      - Requests for full user list                                          *
+ *                                                                             *
+ *******************************************************************************/
 
 /* TODO
- *  TODO-List
+ *  Handle client and subserver request
+ *  Have global variables to do various tasks
  */
 
 /* Dev Log
  *  Project Created: 2016-01-15 13:45 - Yicheng W.
+ *  Basic Connection establishment completed: 2016-01-19 15:35 - Yicheng W.
  */
 
 #include <stdio.h>
@@ -31,21 +36,31 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <stdarg.h>
 
 #include "central_server.h"
 
 /* CONSTANTS ******************************************************************/
 
 #define MAX_SUBSERVER_COUNT 100 // maximum number of subservers (chat/co-editing rooms the server can handle)
+#define MAX_CLIENT_COUNT 500 // maximum number of client connections
 
-// for pipping purposes
+// for socket purposes
 #define FROM_CLIENT 0
 #define FROM_SUBSERV 1
 
 #define CLIENT_PORT 11235
 #define SUBSERV_PORT 11238
 
-int DEBUG; // print statements
+#define CONN_REQUEST "Connection Request"
+
+int DEBUG = 0; // print statements, off by default
+
+char *help = ""; // help doc string TODO
+
+/* MACROS *********************************************************************/
+#define REMOVE_ELEMENT(list, index, sz) memset(list + index, 0, sz)
+#define FIRST_EMPTY_ELEMENT(beginning, end) for (; beginning != end ; beginning++) { if (*beginning == 0) return beginning; } return -1;
 
 /* MAIN ***********************************************************************/
 
@@ -56,6 +71,10 @@ int main(int argc, char *argv[]) {
     int sockets[2];
     char buf[256];
 
+    subserver *rooms_list = (subserver *)calloc(MAX_SUBSERVER_COUNT, sizeof(subserver));
+
+    client *users_list = (client *)calloc(MAX_CLIENT_COUNT, sizeof(client));
+ 
     // command line argument parser
     
     if (argc > 0) {
@@ -65,6 +84,14 @@ int main(int argc, char *argv[]) {
                     case 'd':
                         DEBUG = 1;
                         break;
+
+                    case 'h':
+                        printf("%s", help);
+                        break;
+
+                    default:
+                        printf("Unknown option: %s\nFor help run ./central_server.out -h\nexiting...\n", argv[i]);
+                        exit(1);
                     // more cases to come
                 }
             }
@@ -76,17 +103,19 @@ int main(int argc, char *argv[]) {
     establish_connection(&sockets[FROM_CLIENT], &sockets[FROM_SUBSERV], CLIENT_PORT, SUBSERV_PORT);
 
     // handle requests
-    
-    fd = listen_central(&from_client, sockets);
 
-    ret_val = read(fd, buf, sizeof(buf));
-    check_error(ret_val);
+    while (1) {
+        fd = listen_central(&from_client, sockets);
 
-    if (from_client) { // handle client requests
-        handle_client(buf);
-    }
-    else{
-        handle_subserv(buf);
+        ret_val = read(fd, buf, sizeof(buf));
+        check_error(ret_val);
+
+        if (from_client) { // handle client requests
+            handle_client(buf, rooms_list, users_list);
+        }
+        else{
+            handle_subserv(buf, rooms_list, users_list);
+        }
     }
 
     return 0;
@@ -97,9 +126,13 @@ int main(int argc, char *argv[]) {
 /* debug: checks if debug is on, if so, print the statement, otherwise, do
  * nothing
  */
-void debug (char *statement){
+void debug (char *format, ...){
     if (DEBUG) {
-        printf("%s\n", statement);
+        va_list strings;
+        int done;
+        va_start(strings, format);
+        done = vfprintf(stdout, format, strings);
+        va_end(strings);
     }
 }
 
@@ -126,6 +159,9 @@ void check_error (int ret_val){
  */
 void establish_connection (int *socket_c, int *socket_sub, int c_port, int s_port){
     *socket_c = socket(AF_INET, SOCK_STREAM, 0);
+
+    debug("<central_server>: socket to client created\n");
+
     struct sockaddr_in listener_c; // for incoming clients
     listener_c.sin_family = AF_INET;
     listener_c.sin_port = htons(c_port); // this is the port for incoming clients
@@ -136,7 +172,12 @@ void establish_connection (int *socket_c, int *socket_sub, int c_port, int s_por
         exit(1);
     }
 
+    debug("<central_server>: socket to client binded to address INADDR_ANY at port %d\n", CLIENT_PORT);
+
     *socket_sub = socket(AF_INET, SOCK_STREAM, 0);
+
+    debug("<central_server>: socket to subservers created\n");
+
     struct sockaddr_in listener_sub; // for subservers
     listener_sub.sin_family = AF_INET;
     listener_sub.sin_port = htons(s_port); // this is the port for subserv requests
@@ -146,6 +187,8 @@ void establish_connection (int *socket_c, int *socket_sub, int c_port, int s_por
         fprintf(stderr, "Error %d at bind: %s\n", errno, strerror(errno));
         exit(1);
     } 
+
+    debug("<central_server>: socket to subservers binded to address 127.0.0.1 at port %d\n", SUBSERV_PORT);
 }
 
 /* listen_central: blocks until the read queue of either the server connection
@@ -167,7 +210,7 @@ int listen_central (int *from_client, int sockets[]){
 
     int max_fd = (sockets[FROM_CLIENT], sockets[FROM_SUBSERV]) ? sockets[FROM_CLIENT] : sockets[FROM_SUBSERV]; // maxfd
 
-    int status;
+    debug("<central_server>: awaiting connection...\n");
 
     if (select(max_fd + 1, &readfds, NULL, NULL, NULL) == -1) {
         fprintf(stderr, "Error %d at select: %s\n", errno, strerror(errno));
@@ -176,11 +219,13 @@ int listen_central (int *from_client, int sockets[]){
 
     if (FD_ISSET(sockets[FROM_CLIENT], &readfds)) { // data is avaliable on client side
         *from_client = 1;
+        debug("<central_server>: client connects\n");
         return accept(sockets[FROM_CLIENT], NULL, NULL);
     }
 
     else if (FD_ISSET(sockets[FROM_SUBSERV], &readfds)) { // data is avaliable from subserver
         *from_client = 0;
+        debug("<central_server>: subserver connects\n");
         return accept(sockets[FROM_SUBSERV], NULL, NULL);
     }  
 }
@@ -192,8 +237,10 @@ int listen_central (int *from_client, int sockets[]){
  *
  * TODO what it actually does
  */
-void handle_client (char *buf){
-    // TODO
+void handle_client (char *buf, subserver *rooms_list, client *users_list){
+    if (strncmp(buf, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
+        
+    }
 }
 
 /* handle_subserv: handles a subserver request
@@ -203,6 +250,6 @@ void handle_client (char *buf){
  *
  * TODO what it actually does
  */
-void handle_subserv (char *buf){
+void handle_subserv (char *buf, subserver *rooms_list, client *users_list){
     // TODO
 }
