@@ -16,7 +16,7 @@ void debug(char *statement, ...);
 void establish_connection(int *socket_c, int *socket_sub, int c_port, int s_port);
 int listen_central(int *from_client, int sockets[]);
 void check_error(int ret_val);
-void handle_client(char *buf, subserver *room_list, client *user_list);
-void handle_subserv(char *buf, subserver *room_list, client *user_list);
+void handle_client(int socket, subserver *room_list, client *users_list);
+void handle_subserv(int socket, subserver *room_list, client *users_list);
 
 #endif // CENTRAL_SERVER_H_

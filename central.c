@@ -58,13 +58,17 @@ int DEBUG = 0; // print statements, off by default
 
 char *help = ""; // help doc string TODO
 
+///client NO_CLIENT = (client *)malloc(sizeof(client));
+///memset(NO_CLIENT, 0, sizeof(client));
+
+
 /* MACROS *********************************************************************/
 #define REMOVE_ELEMENT(list, index, sz) memset(list + index, 0, sz)
-#define FIRST_EMPTY_ELEMENT(beginning, end) for (; beginning != end ; beginning++) { if (*beginning == 0) return beginning; } return -1;
 
 /* MAIN ***********************************************************************/
 
 int main(int argc, char *argv[]) {
+
     // vars
     
     int from_client, fd, i, ret_val;
@@ -107,14 +111,11 @@ int main(int argc, char *argv[]) {
     while (1) {
         fd = listen_central(&from_client, sockets);
 
-        ret_val = read(fd, buf, sizeof(buf));
-        check_error(ret_val);
-
         if (from_client) { // handle client requests
-            handle_client(buf, rooms_list, users_list);
+            handle_client(fd, rooms_list, users_list);
         }
         else{
-            handle_subserv(buf, rooms_list, users_list);
+            handle_subserv(fd, rooms_list, users_list);
         }
     }
 
@@ -208,14 +209,12 @@ int listen_central (int *from_client, int sockets[]){
     FD_SET(sockets[FROM_CLIENT], &readfds);
     FD_SET(sockets[FROM_SUBSERV], &readfds);
 
-    int max_fd = (sockets[FROM_CLIENT], sockets[FROM_SUBSERV]) ? sockets[FROM_CLIENT] : sockets[FROM_SUBSERV]; // maxfd
-
     debug("<central_server>: awaiting connection...\n");
 
-    if (select(max_fd + 1, &readfds, NULL, NULL, NULL) == -1) {
+    if (select(2, &readfds, NULL, NULL, NULL) == -1) {
         fprintf(stderr, "Error %d at select: %s\n", errno, strerror(errno));
         exit(1);
-    };
+    }
 
     if (FD_ISSET(sockets[FROM_CLIENT], &readfds)) { // data is avaliable on client side
         *from_client = 1;
@@ -233,12 +232,28 @@ int listen_central (int *from_client, int sockets[]){
 /* handle_client: handles a client request
  * 
  * arguments:
- *     char *buf: the string that the client sent
+ *     socket: the fd of the incoming socket connection
+ *     rooms_list: the array of subservers
+ *     users_list: the array of clients
  *
  * TODO what it actually does
  */
-void handle_client (char *buf, subserver *rooms_list, client *users_list){
+void handle_client (int socket, subserver *rooms_list, client *users_list){
+    char buf[256];
+    int ret_val, c;
+
+    ret_val = read(socket, buf, sizeof(buf));
+    check_error(ret_val);
+
     if (strncmp(buf, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
+        client *new_connection;
+        for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
+            if (*(users_list + c) == 0) {
+                new_connection = users_list + c;
+                break;
+            }
+        }
+
         
     }
 }
@@ -250,6 +265,6 @@ void handle_client (char *buf, subserver *rooms_list, client *users_list){
  *
  * TODO what it actually does
  */
-void handle_subserv (char *buf, subserver *rooms_list, client *users_list){
+void handle_subserv (int socket, subserver *rooms_list, client *users_list){
     // TODO
 }
