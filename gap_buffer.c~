@@ -28,7 +28,7 @@
  *
  *      We can limit the number of editors per room to 8, a reasonable number.
  *      Storing the editors (users) in an array, indices 0-7, denoted as 'i',
- *      we can mark down the location of a cursor by flipping the i-th bit of the
+ *      we can mark down the location of a cursor by flipping the ith bit of the
  *      OWNER_ID (buffer[n][1] for the nth character) to true.
  *
  *      Ex:
