@@ -45,3 +45,32 @@ client *handshake_join_server (int fd, int index, char *buf) {
     write(fd, new_connection, sizeof(client));
     return new_connection;
 }
+
+/* create_new_room: create a new chat room, and relays information to the client
+ *
+ * Sends to client: the index of the room, 1 int
+ */
+subserver *create_new_room (int fd, int index, int room_no){
+    int c;
+    subserver *new_room = (subserver *)malloc(sizeof(subserver));
+
+    for (c = 0 ; c < MAX_CLIENT_PER_ROOM ; c++) {
+        new_room->user_ids[c] = -1; // default, see distribute
+    }
+
+    new_room->user_ids[0] = index;
+
+    write(fd, &room_no, sizeof(int));
+
+    return new_room;
+}
+
+void join_room(int id, subserver *room) {
+    int c;
+    for (c = 0 ; c < MAX_CLIENT_PER_ROOM ; c++) {
+        if (room->user_ids[c] == -1) {
+            room->user_ids[c] = id;
+            return;
+        }
+    }
+}

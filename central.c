@@ -2,7 +2,7 @@
  * Central Server Program for NetScribe                                        *
  *                                                                             *
  * Authors                                                                     *
- *  Yicheng Wang                                                               *
+ *  Yicheng Wang <alex-wyc>                                                    *
  *                                                                             *
  * Description                                                                 *
  *  Handles Public Channel Communications and requests from each subserver,    *
@@ -91,25 +91,50 @@ int main(int argc, char *argv[]) {
 
 /* UTIL FUNCTIONS *************************************************************/
 
-/* debug: checks if debug is on, if so, print the statement, otherwise, do
- * nothing
+/* handle_client: handles a client request
+ * 
+ * arguments:
+ *     socket: the fd of the incoming socket connection
+ *
+ * TODO what it actually does
  */
-void debug (char *format, ...){
-    if (DEBUG) {
-        va_list strings;
-        int done;
-        va_start(strings, format);
-        done = vfprintf(stdout, format, strings);
-        va_end(strings);
-    }
-}
+void handle_client (int socket){
+    char buf[256];
+    int ret_val, c;
 
-/* check_error: checks for error in return value, exits the program if there is
- * error
- */
-void check_error (int ret_val){
-    if (ret_val == -1) {
-        fprintf(stderr, "Error %d: %s\n", errno, strerror(errno));
+    ret_val = read(socket, buf, sizeof(buf));
+    check_error(ret_val);
+
+    if (strncmp(buf, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
+        for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
+            if (users_list[c] == 0) {
+                users_list[c] = handshake_join_server(socket, c, buf);
+            }
+        }
+    }
+
+    else { // this is not a handshake request, parse input string and execute
+        message *incoming = parse(buf);
+
+        if (incoming->to_distribute) { // if this is a command to distribute
+            subserver *local = rooms_list[users_list[incoming->remote_client_id]->room];
+            distribute(local->user_ids, MAX_CLIENT_PER_ROOM, *incoming);
+        }
+
+        else {
+            if (strstr(incoming->cmd, "new")) {
+                for (c = 0 ; c < MAX_SUBSERVER_COUNT ; c++) {
+                    if (rooms_list[c] == 0) {
+                        client *sender = users_list[incoming->remote_client_id];
+                        rooms_list[c] = create_new_room(sender->socket_id, incoming->remote_client_id, c);
+                    }
+                }
+            }
+
+            if (strstr(incoming->cmd, "join")) {
+                join_room(incoming->remote_client_id, rooms_list[atoi(incoming->content)]);
+            }
+        }
     }
 }
 
@@ -167,38 +192,24 @@ int establish_connection (){
     return socket_c;
 }
 
-/* handle_client: handles a client request
- * 
- * arguments:
- *     socket: the fd of the incoming socket connection
- *
- * TODO what it actually does
+/* debug: checks if debug is on, if so, print the statement, otherwise, do
+ * nothing
  */
-void handle_client (int socket){
-    char buf[256];
-    int ret_val, c;
-
-    ret_val = read(socket, buf, sizeof(buf));
-    check_error(ret_val);
-
-    if (strncmp(buf, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
-        for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
-            if (users_list[c] == 0) {
-                users_list[c] = handshake_join_server(socket, c, buf);
-            }
-        }
+void debug (char *format, ...){
+    if (DEBUG) {
+        va_list strings;
+        int done;
+        va_start(strings, format);
+        done = vfprintf(stdout, format, strings);
+        va_end(strings);
     }
+}
 
-    else { // this is not a handshake request, parse input string and execute
-        message *incoming = parse(buf);
-
-        if (incoming->to_distribute) { // if this is a command to distribute
-            subserver *local = rooms_list[users_list[incoming->remote_client_id]->room];
-            distribute(local->user_ids, MAX_CLIENT_PER_ROOM, *incoming);
-        }
-
-        else {
-            if (strstr())
-        }
+/* check_error: checks for error in return value, exits the program if there is
+ * error
+ */
+void check_error (int ret_val){
+    if (ret_val == -1) {
+        fprintf(stderr, "Error %d: %s\n", errno, strerror(errno));
     }
 }
