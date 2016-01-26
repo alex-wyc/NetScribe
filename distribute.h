@@ -1,6 +1,9 @@
 #include "central.h"
 
-int run_chat_room(char * message, int socket_sender, client * users_list, subserver * rooms_list);
-int distribute_message(char * message, client * sender, subserver * room);
-char * format_message(char * name, char * message);
+#ifndef _DISTRIBUTE_H
+#define _DISTRIBUTE_H
+
 message *parse(char *buf); // parses buffer into an incoming message struct
+void distribute(int user_ids[], int sz, message incoming); // sends the message across a list of user ids with size sz
+
+#endif // _DISTRIBUTE_H

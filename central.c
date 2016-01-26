@@ -9,11 +9,24 @@
  *  also in charge of creating subservers and providing them with global       *
  *  informations.                                                              *
  *                                                                             *
- *  Handles:                                                                   *
- *      - Room (subserver) creation                                            *
- *      - User invitation                                                      *
- *      - Requests for full user list                                          *
+ * Theory:                                                                     *
+ *  This is the main executable file for the central server.                   *
  *                                                                             *
+ *  It calls functions from distribute.c, protocol.c and util.c                *
+ *                                                                             *
+ *  Basic idea is that we have an aray of pointers to client struct that is    *
+ *  the list of all the users and another array of pointers to the subserver   *
+ *  wrapper class that contains a list of client_ids (indices in the client    *
+ *  struct). These two arrays are open-to-edit to all functions.               *
+ *                                                                             *
+ *  The main function creates a socket to listen on any incoming addresses,    *
+ *  once a connection is avaliabe, it is sent to RO fd on the server side, the *
+ *  client writes the command, and both sides closes the descriptor. This rule *
+ *  is broken during setup of the client.                                      *
+ *                                                                             *
+ *  However, persistent WO sockets (for the server side to the client side)    *
+ *  exist within each user struct, which is what the server uses to talk back  *
+ *  to the client.                                                             *
  *******************************************************************************/
 
 /* TODO
@@ -40,64 +53,37 @@
 
 #include "central.h"
 #include "distribute.h"
+#include "protocols.h"
 
 /* CONSTANTS ******************************************************************/
 
 int DEBUG = 0; // print statements, off by default
 
-char *help = ""; // help doc string TODO
+const char *help = ""; // help doc string TODO
 
 /* MAIN ***********************************************************************/
 
 int main(int argc, char *argv[]) {
 
     // vars
-    
-    int from_client, fd, i, ret_val;
-    int sockets[2];
-    char buf[256];
+    int from_client, fd, ret_val;
 
-    subserver *rooms_list[MAX_SUBSERVER_COUNT] = {0}; // zero out the array of pointers
-    client *users_list[MAX_CLIENT_COUNT] = {0};  // zero out the array of pointers
- 
     // command line argument parser
-    
-    if (argc > 0) {
-        for (i = 0 ; i < argc ; i++) {
-            if (*argv[i] == '-') {
-                switch (*(argv[i] + 1)) {
-                    case 'd':
-                        DEBUG = 1;
-                        break;
-
-                    case 'h':
-                        printf("%s", help);
-                        break;
-
-                    default:
-                        printf("Unknown option: %s\nFor help run ./central_server.out -h\nexiting...\n", argv[i]);
-                        exit(1);
-                    // more cases to come
-                }
-            }
-        }
-    }
+    handle_cmd_line_args(argc, argv);
 
     // establishing socket
+    from_client = establish_connection();
 
-    establish_connection(&sockets[FROM_CLIENT], &sockets[FROM_SUBSERV], CLIENT_PORT, SUBSERV_PORT);
+    ret_val = listen(from_client, MAX_CLIENT_COUNT);
+    check_error(ret_val);
 
     // handle requests
-
     while (1) {
-        fd = listen_central(&from_client, sockets);
+        fd = accept(from_client, NULL, NULL);
 
-        if (from_client) { // handle client requests
-            handle_client(fd, rooms_list, users_list);
-        }
-        else{
-            handle_subserv(fd, rooms_list, users_list);
-        }
+        handle_client(fd);
+
+        close(fd); // closes the file descriptor after the thing is done, note that this fd is READ ONLY!
     }
 
     return 0;
@@ -127,99 +113,68 @@ void check_error (int ret_val){
     }
 }
 
-/* establish_connection: creates and binds the sockets to both client and
- * subservers to their respective ports
+/* handle_cmd_line_args: handles command line options and arguments
+ */
+void handle_cmd_line_args (int argc, char *argv[]){
+    int i;
+    if (argc > 0) {
+        for (i = 0 ; i < argc ; i++) {
+            if (*argv[i] == '-') {
+                switch (*(argv[i] + 1)) {
+                    case 'd':
+                        DEBUG = 1;
+                        break;
+
+                    case 'h':
+                        printf("%s", help);
+                        break;
+
+                    default:
+                        printf("Unknown option: %s\nFor help run ./central_server.out -h\nexiting...\n", argv[i]);
+                        exit(1);
+                        // more cases to come
+                }
+            }
+        }
+    }
+}
+
+/* establish_connection: creates and binds the sockets to client connection
  *
- * arguments:
- *     int *socket_c: to-be-filled socket that listens to clients
- *     int *socket_sub: to-be-filled socket that listens to subservers
- *     int c_port: the port to listen on for client connections
- *     int s_port: the port to listen on for subserver connections
+ * generates a socket that listens to clients, it will bind to INADDR_ANY and
+ * listen on port CLIENT_PORT as defined in the header
  *
  * returns:
- *     modifies socket_c and socket_sub
+ *     the file descriptor of the resultant socket
  */
-void establish_connection (int *socket_c, int *socket_sub, int c_port, int s_port){
-    *socket_c = socket(AF_INET, SOCK_STREAM, 0);
+int establish_connection (){
+    int socket_c = socket(AF_INET, SOCK_STREAM, 0);
 
     debug("<central_server>: socket to client created\n");
 
     struct sockaddr_in listener_c; // for incoming clients
     listener_c.sin_family = AF_INET;
-    listener_c.sin_port = htons(c_port); // this is the port for incoming clients
+    listener_c.sin_port = htons(CLIENT_PORT); // this is the port for incoming clients
     listener_c.sin_addr.s_addr = INADDR_ANY;
-    
-    if (bind(*socket_c, (struct sockaddr*)&listener_c, sizeof(listener_c)) == -1) {
+
+    if (bind(socket_c, (struct sockaddr*)&listener_c, sizeof(listener_c)) == -1) {
         fprintf(stderr, "Error %d at bind: %s", errno, strerror(errno));
         exit(1);
     }
 
     debug("<central_server>: socket to client binded to address INADDR_ANY at port %d\n", CLIENT_PORT);
 
-    *socket_sub = socket(AF_INET, SOCK_STREAM, 0);
-
-    debug("<central_server>: socket to subservers created\n");
-
-    struct sockaddr_in listener_sub; // for subservers
-    listener_sub.sin_family = AF_INET;
-    listener_sub.sin_port = htons(s_port); // this is the port for subserv requests
-    listener_sub.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-    if (bind(*socket_sub, (struct sockaddr*)&listener_sub, sizeof(listener_sub)) == -1) {
-        fprintf(stderr, "Error %d at bind: %s\n", errno, strerror(errno));
-        exit(1);
-    } 
-
-    debug("<central_server>: socket to subservers binded to address 127.0.0.1 at port %d\n", SUBSERV_PORT);
-}
-
-/* listen_central: blocks until the read queue of either the server connection
- * or client connection is open, then returns 
- * 
- * arguments:
- *     int *from_client: boolean value as to if the connection is from client
- *     int sockets[]: the sockets to listen to
- * 
- * returns:
- *     a file descriptor to the accepted connection, also modifies from_client
- */
-int listen_central (int *from_client, int sockets[]){
-    fd_set readfds;
-
-    FD_ZERO(&readfds);
-    FD_SET(sockets[FROM_CLIENT], &readfds);
-    FD_SET(sockets[FROM_SUBSERV], &readfds);
-
-    debug("<central_server>: awaiting connection...\n");
-
-    if (select(2, &readfds, NULL, NULL, NULL) == -1) {
-        fprintf(stderr, "Error %d at select: %s\n", errno, strerror(errno));
-        exit(1);
-    }
-
-    if (FD_ISSET(sockets[FROM_CLIENT], &readfds)) { // data is avaliable on client side
-        *from_client = 1;
-        debug("<central_server>: client connects\n");
-        return accept(sockets[FROM_CLIENT], NULL, NULL);
-    }
-
-    else if (FD_ISSET(sockets[FROM_SUBSERV], &readfds)) { // data is avaliable from subserver
-        *from_client = 0;
-        debug("<central_server>: subserver connects\n");
-        return accept(sockets[FROM_SUBSERV], NULL, NULL);
-    }  
+    return socket_c;
 }
 
 /* handle_client: handles a client request
  * 
  * arguments:
  *     socket: the fd of the incoming socket connection
- *     rooms_list: the array of subservers
- *     users_list: the array of clients
  *
  * TODO what it actually does
  */
-void handle_client (int socket, subserver *rooms_list[], client *users_list[]){
+void handle_client (int socket){
     char buf[256];
     int ret_val, c;
 
@@ -227,16 +182,9 @@ void handle_client (int socket, subserver *rooms_list[], client *users_list[]){
     check_error(ret_val);
 
     if (strncmp(buf, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
-        client *new_connection = (client *)malloc(sizeof(client));
         for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
             if (users_list[c] == 0) {
-                new_connection->socket_id = socket;
-                strncpy(new_connection->name,
-                        buf + sizeof(CONN_REQUEST),
-                        sizeof(new_connection->name));
-                users_list[c] = new_connection;
-                sprintf(buf, "Acknowledged: %d", c);
-                write(socket, buf, sizeof(buf));
+                users_list[c] = handshake_join_server(socket, c, buf);
             }
         }
     }
@@ -245,21 +193,12 @@ void handle_client (int socket, subserver *rooms_list[], client *users_list[]){
         message *incoming = parse(buf);
 
         if (incoming->to_distribute) { // if this is a command to distribute
-            subserver *local = rooms_list[users_list[incoming->client_id]->room_id];
-            for (c = 0 ; c < MAX_CLIENT_PER_ROOM ; c++) {
-                if 
-            }
+            subserver *local = rooms_list[users_list[incoming->remote_client_id]->room];
+            distribute(local->user_ids, MAX_CLIENT_PER_ROOM, *incoming);
+        }
+
+        else {
+            if (strstr())
         }
     }
-}
-
-/* handle_subserv: handles a subserver request
- *
- * arguments:
- *     char *buf: the string that the subserver sent
- *
- * TODO what it actually does
- */
-void handle_subserv (int socket, subserver *rooms_list[], client *users_list[]){
-    // TODO
 }
