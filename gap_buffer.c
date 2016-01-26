@@ -126,3 +126,9 @@ gapbuf gapbuf_new(int limit) {
     return G;
 }
 
+gapbuf gapbuf_forward(gapbuf G, int user) {
+    assert(is_gapbuf(G));
+    assert(0 <= user && user < MAX_USERS);
+    G->buffer[
+}
+

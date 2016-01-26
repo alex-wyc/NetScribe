@@ -2,7 +2,6 @@
 
 #ifndef _GAP_BUFFER
 #define _GAP_BUFFER
-#define CURSOR 0
 #define MAX_USERS 8
 
 struct gap_buffer {
