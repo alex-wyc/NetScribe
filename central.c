@@ -38,32 +38,14 @@
 #include <time.h>
 #include <stdarg.h>
 
-#include "central_server.h"
+#include "central.h"
+#include "distribute.h"
 
 /* CONSTANTS ******************************************************************/
-
-#define MAX_SUBSERVER_COUNT 100 // maximum number of subservers (chat/co-editing rooms the server can handle)
-#define MAX_CLIENT_COUNT 500 // maximum number of client connections
-
-// for socket purposes
-#define FROM_CLIENT 0
-#define FROM_SUBSERV 1
-
-#define CLIENT_PORT 11235
-#define SUBSERV_PORT 11238
-
-#define CONN_REQUEST "Connection Request"
 
 int DEBUG = 0; // print statements, off by default
 
 char *help = ""; // help doc string TODO
-
-///client NO_CLIENT = (client *)malloc(sizeof(client));
-///memset(NO_CLIENT, 0, sizeof(client));
-
-
-/* MACROS *********************************************************************/
-#define REMOVE_ELEMENT(list, index, sz) memset(list + index, 0, sz)
 
 /* MAIN ***********************************************************************/
 
@@ -75,9 +57,8 @@ int main(int argc, char *argv[]) {
     int sockets[2];
     char buf[256];
 
-    subserver *rooms_list = (subserver *)calloc(MAX_SUBSERVER_COUNT, sizeof(subserver));
-
-    client *users_list = (client *)calloc(MAX_CLIENT_COUNT, sizeof(client));
+    subserver *rooms_list[MAX_SUBSERVER_COUNT] = {0}; // zero out the array of pointers
+    client *users_list[MAX_CLIENT_COUNT] = {0};  // zero out the array of pointers
  
     // command line argument parser
     
@@ -238,7 +219,7 @@ int listen_central (int *from_client, int sockets[]){
  *
  * TODO what it actually does
  */
-void handle_client (int socket, subserver *rooms_list, client *users_list){
+void handle_client (int socket, subserver *rooms_list[], client *users_list[]){
     char buf[256];
     int ret_val, c;
 
@@ -246,15 +227,29 @@ void handle_client (int socket, subserver *rooms_list, client *users_list){
     check_error(ret_val);
 
     if (strncmp(buf, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
-        client *new_connection;
+        client *new_connection = (client *)malloc(sizeof(client));
         for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
-            if (*(users_list + c) == 0) {
-                new_connection = users_list + c;
-                break;
+            if (users_list[c] == 0) {
+                new_connection->socket_id = socket;
+                strncpy(new_connection->name,
+                        buf + sizeof(CONN_REQUEST),
+                        sizeof(new_connection->name));
+                users_list[c] = new_connection;
+                sprintf(buf, "Acknowledged: %d", c);
+                write(socket, buf, sizeof(buf));
             }
         }
+    }
 
-        
+    else { // this is not a handshake request, parse input string and execute
+        message *incoming = parse(buf);
+
+        if (incoming->to_distribute) { // if this is a command to distribute
+            subserver *local = rooms_list[users_list[incoming->client_id]->room_id];
+            for (c = 0 ; c < MAX_CLIENT_PER_ROOM ; c++) {
+                if 
+            }
+        }
     }
 }
 
@@ -265,6 +260,6 @@ void handle_client (int socket, subserver *rooms_list, client *users_list){
  *
  * TODO what it actually does
  */
-void handle_subserv (int socket, subserver *rooms_list, client *users_list){
+void handle_subserv (int socket, subserver *rooms_list[], client *users_list[]){
     // TODO
 }

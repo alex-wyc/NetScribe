@@ -28,7 +28,7 @@ edit!!Yeech:: cl
 
 client --> c_server: "Connection Request: <username>"
 c_server --> client: "Acknowledged: <unique id>"
-client --> c_server: "<unique id>!!<action>::<content>"
+client --> c_server: "<unique id>``<action>``<content>"
 c_server --> client: "<response>"
 
 actions:
