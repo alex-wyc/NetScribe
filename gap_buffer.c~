@@ -1,7 +1,7 @@
 /*
  * Implementation of Gap Buffer Text Storage, adapted for multiple cursors.
  *
- * AUTHORS: ETHAN CHENG <elc1798>, SOPHIA ZHENG <sophz55>
+ * AUTHOR: ETHAN CHENG <elc1798>
  *
  *
  * Theory:
@@ -126,45 +126,9 @@ gapbuf gapbuf_new(int limit) {
     return G;
 }
 
-/*
- * Moves gapbuf for user forward
- */
 gapbuf gapbuf_forward(gapbuf G, int user) {
     assert(is_gapbuf(G));
     assert(0 <= user && user < MAX_USERS);
-  
-    G->gap_start[user]++;
-    G->gap_end[user]++;
-
+    G->buffer[
 }
 
-/*
- * Moves gapbuf for user backward
- */
-void gapbuf_backward(gapbuf G, int user){
-    assert(is_gapbuf(G));
-    assert(0 <= user && user < MAX_USERS);
-  
-    G->gap_start[user]--;
-    G->gap_end[user]--;
-}
-
-/*
- * Inserts char c before the gap for user
- */
-void gapbuf_insert(gapbuf G, char c, int user){
-    assert(is_gapbuf(G));
-    assert(0 <= user && user < MAX_USERS);
-
-
-}
-
-/*
- * Deletes the character before the gap for user
- */
-void gapbuf_delete(gapbuf G, int user){
-    assert(is_gapbuf(G));
-    assert(0 <= user && user < MAX_USERS);
-
-
-}
