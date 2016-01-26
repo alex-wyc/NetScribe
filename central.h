@@ -32,10 +32,6 @@ typedef struct message {
     char *content; // the content of the command
 } message;
 
-/* GLOBAL VARIABLES ***********************************************************/
-client *users_list[MAX_CLIENT_COUNT] = {0};
-subserver *rooms_list[MAX_SUBSERVER_COUNT] = {0};
-
 /* FUNCTION HEADERS ***********************************************************/
 void debug(char *statement, ...);
 void check_error(int ret_val);

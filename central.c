@@ -61,6 +61,10 @@ int DEBUG = 0; // print statements, off by default
 
 const char *help = ""; // help doc string TODO
 
+/* GLOBAL VARIABLES ***********************************************************/
+client *users_list[MAX_CLIENT_COUNT] = {0};
+subserver *rooms_list[MAX_SUBSERVER_COUNT] = {0};
+
 /* MAIN ***********************************************************************/
 
 int main(int argc, char *argv[]) {

@@ -10,9 +10,6 @@
 #include "distribute.h"
 #include "central.h"
 
-int main() {
-}
-
 /* parse: parses an incoming string buf into a message struct
  *
  * buf string takes the form of:
