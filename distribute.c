@@ -35,7 +35,7 @@ message *parse (char *buf) {
 /* distribute: sends the incoming message across a list of user_ids
  * TODO long description
  */
-void distribute (int user_ids[], int sz, message incoming) {
+void distribute (int user_ids[], int sz, client *users_list[], message incoming) {
     int i;
     for (i = 0 ; i < sz ; i++) {
         if (user_ids[i] != -1) {

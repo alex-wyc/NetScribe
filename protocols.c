@@ -65,12 +65,15 @@ subserver *create_new_room (int fd, int index, int room_no){
     return new_room;
 }
 
-void join_room(int id, subserver *room) {
+/* join_room: input id of the user, and the room, returns the local id of the
+ * client
+ */
+int join_room(int id, subserver *room) {
     int c;
     for (c = 0 ; c < MAX_CLIENT_PER_ROOM ; c++) {
         if (room->user_ids[c] == -1) {
             room->user_ids[c] = id;
-            return;
+            return c;
         }
     }
 }

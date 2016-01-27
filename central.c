@@ -122,7 +122,7 @@ void handle_client (int socket){
 
         if (incoming->to_distribute) { // if this is a command to distribute
             subserver *local = rooms_list[users_list[incoming->remote_client_id]->room];
-            distribute(local->user_ids, MAX_CLIENT_PER_ROOM, *incoming);
+            distribute(local->user_ids, MAX_CLIENT_PER_ROOM, users_list, *incoming);
         }
 
         else {
@@ -131,12 +131,16 @@ void handle_client (int socket){
                     if (rooms_list[c] == 0) {
                         client *sender = users_list[incoming->remote_client_id];
                         rooms_list[c] = create_new_room(sender->socket_id, incoming->remote_client_id, c);
+                        sender->room = c;
+                        sender->room_id = 0;
                     }
                 }
             }
 
             if (strstr(incoming->cmd, "join")) {
-                join_room(incoming->remote_client_id, rooms_list[atoi(incoming->content)]);
+                client *sender = users_list[incoming->remote_client_id];
+                sender->room_id = join_room(incoming->remote_client_id, rooms_list[atoi(incoming->content)]);
+                sender->room = atoi(incoming->content);
             }
         }
     }
