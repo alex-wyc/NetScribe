@@ -22,4 +22,5 @@ void gapbuf_forward(gapbuf G, int user);        // Moves gapbuf for user forward
 void gapbuf_backward(gapbuf G, int user);       // Moves gapbuf for user backward
 void gapbuf_insert(gapbuf G, char c, int user); // Inserts char c before the gap for user
 void gapbuf_delete(gapbuf G, int user);         // Deletes the character before the gap for user
+void free_gapbuf(gapbuf G);                     // Frees a gap buffer
 #endif

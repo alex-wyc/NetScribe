@@ -126,16 +126,25 @@ gapbuf gapbuf_new(int limit) {
     return G;
 }
 
+void remove_user_from(gapbuf G, int user, int index) {
+    G->buffer[index][1] = G->buffer[index][1] & ~(1 << user);
+}
+
+void add_user_to(gapbuf G, int user, int index) {
+    G->buffer[index][1] = G->buffer[index][1] | (1 << user);
+}
+
 /*
  * Moves gapbuf for user forward
  */
-gapbuf gapbuf_forward(gapbuf G, int user) {
+void gapbuf_forward(gapbuf G, int user) {
     assert(is_gapbuf(G));
     assert(0 <= user && user < MAX_USERS);
-  
+
+    remove_user_from(G, user, G->gap_start[user]);
     G->gap_start[user]++;
     G->gap_end[user]++;
-
+    add_user_to(G, user, G->gap_end[user]);
 }
 
 /*
@@ -144,8 +153,10 @@ gapbuf gapbuf_forward(gapbuf G, int user) {
 void gapbuf_backward(gapbuf G, int user){
     assert(is_gapbuf(G));
     assert(0 <= user && user < MAX_USERS);
-  
+
     G->gap_start[user]--;
+    add_user_to(G, user, G->gap_start[user]);
+    remove_user_from(G, user, G->gap_end[user]);
     G->gap_end[user]--;
 }
 
@@ -156,7 +167,9 @@ void gapbuf_insert(gapbuf G, char c, int user){
     assert(is_gapbuf(G));
     assert(0 <= user && user < MAX_USERS);
 
-
+    G->buffer[G->gap_start[user]][0] = c;
+    remove_user_from(G, user, G->gap_start[user]);
+    G->gap_start[user]++;
 }
 
 /*
@@ -166,5 +179,23 @@ void gapbuf_delete(gapbuf G, int user){
     assert(is_gapbuf(G));
     assert(0 <= user && user < MAX_USERS);
 
-
+    G->buffer[G->gap_start[user]][0] = 0;
+    G->gap_start[user]--;
+    add_user_to(G, user, G->gap_end[user]);
 }
+
+/*
+ * Frees the memory of a gap buffer
+ */
+void free_gapbuf(gapbuf G) {
+    assert(is_gapbuf(G));
+    int i; for (i = 0; i < G->limit; i++) {
+        free(G->buffer[i]);
+        G->buffer[i] = NULL;
+    }
+    free(G->buffer);
+    G->buffer = NULL;
+    free(G);
+    G = NULL;
+}
+
