@@ -135,6 +135,13 @@ void add_user_to(gapbuf G, int user, int index) {
 }
 
 /*
+ * Returns true if user has cursor object in index
+ */
+bool is_user_in(gapbuf G, int index, int user) {
+    return (G->buffer[index][1] >> user) & 0x01;
+}
+
+/*
  * Moves gapbuf for user forward
  */
 void gapbuf_forward(gapbuf G, int user) {
