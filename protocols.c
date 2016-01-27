@@ -34,13 +34,13 @@
  * client joins, writes to the file descriptor the client class basically
  * TODO long description
  */
-client *handshake_join_server (int fd, int index, char *buf) {
+client *handshake_join_server (int fd, int index, message *incoming) {
     client *new_connection = (client *)malloc(sizeof(client));
     new_connection->socket_id = fd;
 
     strncpy(new_connection->name,
-            buf + sizeof(CONN_REQUEST),
-            sizeof(new_connection->name));
+            incoming->content,
+            sizeof(incoming->content));
 
     write(fd, new_connection, sizeof(client));
     return new_connection;
@@ -77,3 +77,16 @@ int join_room(int id, subserver *room) {
         }
     }
 }
+
+/* distribute: sends the incoming message across a list of user_ids
+ * TODO long description
+ */
+void distribute (int user_ids[], int sz, client *users_list[], message incoming) {
+    int i;
+    for (i = 0 ; i < sz ; i++) {
+        if (user_ids[i] != -1) {
+            write (users_list[user_ids[i]]->socket_id, &incoming, sizeof(incoming));
+        }
+    }
+}
+

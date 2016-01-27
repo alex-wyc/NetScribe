@@ -9,7 +9,8 @@
 
 #define CLIENT_PORT 11235
 
-#define CONN_REQUEST "Connection Request: "
+#define CONN_REQUEST "connreq"
+#define SERVER_EXIT "exitserv"
 
 /* DATATYPE DEFINITIONS *******************************************************/
 
@@ -28,8 +29,8 @@ typedef struct message {
     int remote_client_id; // id of the client on the central server
     int local_client_id; // id of the client on the local server
     int to_distribute; // boolean, true if to distribute, false if internal
-    char *cmd; // the command
-    char *content; // the content of the command
+    char cmd[16]; // the command
+    char content[256]; // the content of the command
 } message;
 
 /* FUNCTION HEADERS ***********************************************************/

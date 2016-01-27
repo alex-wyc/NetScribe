@@ -50,9 +50,9 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #include "central.h"
-#include "distribute.h"
 #include "protocols.h"
 
 /* CONSTANTS ******************************************************************/
@@ -67,8 +67,25 @@ subserver *rooms_list[MAX_SUBSERVER_COUNT] = {0};
 
 /* MAIN ***********************************************************************/
 
-int main(int argc, char *argv[]) {
+static void sighandler(int signo) {
+    if (signo == SIGINT) {
+        fprintf(stderr, "<SERVER> Fatal - Keyboard Interrupt, closing off connections...\n");
+        message exitMSG;
+        exitMSG.remote_client_id = -1; // server
+        exitMSG.local_client_id = -1; // server
+        exitMSG.to_distribute = 1;
+        strncpy(exitMSG.cmd, SERVER_EXIT, sizeof(SERVER_EXIT));
+        int i = 0;
+        while (users_list[i] != 0) {
+            write(users_list[i]->socket_id, &exitMSG, sizeof(exitMSG));
+            close(users_list[i]->socket_id);
+        }
+        fprintf(stderr, "<SERVER> Server exited.\n");
+        exit(1);
+    }
+}
 
+int main(int argc, char *argv[]) {
     // vars
     int from_client, fd, ret_val;
 
@@ -81,13 +98,13 @@ int main(int argc, char *argv[]) {
     ret_val = listen(from_client, MAX_CLIENT_COUNT);
     check_error(ret_val);
 
+    signal(SIGINT, sighandler);
+
     // handle requests
     while (1) {
         fd = accept(from_client, NULL, NULL);
 
         handle_client(fd);
-
-        close(fd); // closes the file descriptor after the thing is done, note that this fd is READ ONLY!
     }
 
     return 0;
@@ -103,26 +120,34 @@ int main(int argc, char *argv[]) {
  * TODO what it actually does
  */
 void handle_client (int socket){
-    char buf[256];
+    message *incoming;
     int ret_val, c;
 
-    ret_val = read(socket, buf, sizeof(buf));
+    ret_val = read(socket, incoming, sizeof(message));
     check_error(ret_val);
 
-    if (strncmp(buf, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
+    if (strncmp(incoming->cmd, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
         for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
             if (users_list[c] == 0) {
-                users_list[c] = handshake_join_server(socket, c, buf);
+                users_list[c] = handshake_join_server(socket, c, incoming);
             }
         }
     }
 
     else { // this is not a handshake request, parse input string and execute
-        message *incoming = parse(buf);
 
         if (incoming->to_distribute) { // if this is a command to distribute
             subserver *local = rooms_list[users_list[incoming->remote_client_id]->room];
             distribute(local->user_ids, MAX_CLIENT_PER_ROOM, users_list, *incoming);
+
+            if (strstr(incoming->cmd, "exit")) {
+                debug("client %d has exited", incoming->remote_client_id);
+                local->user_ids[incoming->local_client_id] = -1; // remove from subserv
+                close(users_list[incoming->remote_client_id]->socket_id); // remove the fd
+                free(users_list[incoming->remote_client_id]); // free the struct
+                users_list[incoming->remote_client_id] = 0; // remove it to NULL
+                close(socket);
+            }
         }
 
         else {
@@ -143,6 +168,8 @@ void handle_client (int socket){
                 sender->room = atoi(incoming->content);
             }
         }
+
+        close(socket);
     }
 }
 
