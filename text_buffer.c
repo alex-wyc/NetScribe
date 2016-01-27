@@ -1,6 +1,8 @@
 /*
  * Text Buffer : A doubly linked list of nodes, containing gap buffers. This
  * primes our gap buffer implementation for use in a text editor.
+ *
+ * To specify which user, the user will be passed as a parameter.
  */
 
 #include <stdbool.h>
@@ -16,71 +18,97 @@ bool is_valid_tbuf(tbuf tb) {
     if (tb == NULL || tb->start == NULL || tb->end == NULL || tb->start == tb->end) {
         return false;
     }
-    bool has_current = false;
+    bool has_current[MAX_USERS];
+    int i; for (i = 0; i < MAX_USERS; i++) {
+        has_current[i] = false;
+    }
+
     dll temp = tb->start;
     while (temp->next != NULL && temp->next != tb->end) {
         if (temp != temp->next->prev) return false; // lmao pls
-        if (temp == tb->current) has_current = true; // Check for existence of 'current'
-        temp = temp->next;                          // Iterate
+        for (i = 0; i < MAX_USERS; i++) {
+            if (temp == tb->current[i]) has_current[i] = true;
+        }
+        temp = temp->next;
     }
-    return has_current && temp->next != NULL && temp->next->prev == temp;
+
+    bool has_all_currents = true;
+    for (i = 0; has_all_currents && i < MAX_USERS; i++) {
+        has_all_currents = has_all_currents && has_current[i];
+    }
+
+    return has_all_currents && temp->next != NULL && temp->next->prev == temp;
 }
 
 /*
- * Returns true if the point is the first (non-terminal) node of the list.
- * Requires that the tbuf is valid
+ * Returns true if the user's current node is the first (non-terminal) node of
+ * the list. Requires that the tbuf is valid
  */
-bool tbuf_current_at_start(tbuf tb) {
+bool tbuf_current_at_start(tbuf tb, int user) {
     assert(is_valid_tbuf(tb));
-    return tb->current == tb->start->next;
+    assert(0 <= user && user < 8);
+    return tb->current[user] == tb->start->next;
 }
 
 /*
- * Returns true if the point is the last (non-terminal) node of the list.
- * Requires that the tbuf is valid
+ * Returns true if the user's current node is the last (non-terminal) node of
+ * the list. Requires that the tbuf is valid
  */
-bool tbuf_current_at_end(tbuf tb) {
+bool tbuf_current_at_end(tbuf tb, int user) {
     assert(is_valid_tbuf(tb));
-    return tb->end == tb->current->next;
+    assert(0 <= user && user < 8);
+    return tb->end == tb->current[user]->next;
 }
 
 /*
- * Moves the current forward, towards the end. Requires valid tbuf, and that
- * current is NOT AT END. Maintains the validity of tbuf and ensures that the
- * current is NOT AT START after completion.
+ * Moves the current of user forward, towards the end. Requires valid tbuf, and
+ * that current is NOT AT END. Maintains the validity of tbuf and ensures that
+ * the current is NOT AT START after completion.
  */
-void tbuf_forward(tbuf tb) {
-    assert(!tbuf_current_at_end(tb));
-    tb->current = tb->current->next;
-    assert(!tbuf_current_at_start(tb));
+void tbuf_forward(tbuf tb, int user) {
+    assert(0 <= user && user < 8);
+    assert(!tbuf_current_at_end(tb, user));
+    tb->current[user] = tb->current[user]->next;
+    assert(!tbuf_current_at_start(tb, user));
 }
 
 /*
- * Moves the current backward, towards start. Requires valid tbuf, and that
- * current is NOT AT START. Maintains the validity of tbuf and ensures that the
- * current IS NOT AT END after completion.
+ * Moves the current of user backward, towards start. Requires valid tbuf, and
+ * that current is NOT AT START. Maintains the validity of tbuf and ensures that
+ * the current IS NOT AT END after completion.
  */
-void tbuf_backward(tbuf tb) {
-    assert(!tbuf_current_at_start(tb));
-    tb->current = tb->current->prev;
-    assert(!tbuf_current_at_end(tb));
+void tbuf_backward(tbuf tb, int user) {
+    assert(0 <= user && user < 8);
+    assert(!tbuf_current_at_start(tb, user));
+    tb->current[user] = tb->current[user]->prev;
+    assert(!tbuf_current_at_end(tb, user));
 }
 
 /*
- * Removes the current node from the text buffer. Moves the current to the next
- * node, unless it was already at the right-most (last / end) node, in which
- * case, it would move to the previous one.
+ * Removes the current node of user from the text buffer. Moves the current to
+ * the next node, unless it was already at the right-most (last / end) node, in
+ * which case, it would move to the previous one.
  * Requires that tb is a valid textbuf, and that the current node is not the
  * only node in the textbuf.
  * Ensures that the tb is still a valid textbuf after completion.
  */
-void tbuf_delete_current(tbuf tb) {
-    assert(!tbuf_current_at_start(tb) || !tbuf_current_at_end(tb));
-    tb->current->prev->next = tb->current->next;
-    tb->current->next->prev = tb->current->prev;
-    dll to_free = tb->current;
-    tb->current = tb->current->next;
-    if (tb->current == tb->end) tb->current = tb->current->prev;
+void tbuf_delete_current(tbuf tb, int user) {
+    assert(0 <= user && user < 8);
+    assert(!tbuf_current_at_start(tb, user) || !tbuf_current_at_end(tb, user));
+
+    dll to_free = tb->current[user];
+
+    int i; for (i = 0; i < MAX_USERS; i++) {
+        if (tb->current[i] != to_free) {
+            continue;
+        }
+        tb->current[i]->prev->next = tb->current[i]->next;
+        tb->current[i]->next->prev = tb->current[i]->prev;
+        tb->current[i] = tb->current[i]->next;
+        if (tb->current[i] == tb->end) {
+            tb->current[i] = tb->current[i]->prev;
+        }
+    }
 
     free_gapbuf(to_free->data);
     free(to_free);
@@ -91,16 +119,18 @@ void tbuf_delete_current(tbuf tb) {
  * Frees the memory associated with tb and sets tb to NULL
  */
 void free_tbuf(tbuf tb) {
-    tb->current = tb->start->next;
-    while(tb->current->next != tb->end) {
-        tbuf_delete_current(tb);
+    tb->current[0] = tb->start->next;
+    while(tb->current[0]->next != tb->end) {
+        tbuf_delete_current(tb, 0);
     }
-    free_gapbuf(tb->current->data);
+    free_gapbuf(tb->current[0]->data);
     free(tb->start);
-    free(tb->current);
-    free(tb->end);
     tb->start = NULL;
-    tb->current = NULL;
+    int i; for (i = 0; i < MAX_USERS; i++) {
+        free(tb->current[i]);
+        tb->current[i] = NULL;
+    }
+    free(tb->end);
     tb->end = NULL;
 }
 
