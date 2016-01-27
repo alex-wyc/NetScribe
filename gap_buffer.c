@@ -111,7 +111,7 @@ bool gap_at_right(gapbuf G, int user) {
 /*
  * Returns a new gapbuffer with specified character limit
  */
-gapbuf gapbuf_new(int limit) {
+gapbuf new_gapbuf(int limit) {
     assert(limit > 0);
     gapbuf G = malloc(sizeof(struct gap_buffer));
     G->limit = limit;

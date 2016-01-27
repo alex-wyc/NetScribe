@@ -3,13 +3,13 @@
  * server file                                                                 *
  *                                                                             *
  * Authors                                                                     *
- *  Yicheng Wang <alex-wyc>                                                    *
+ *  Yicheng Wang <alex-wyc> Ruojia Sun                                         *
  *                                                                             *
  * Description                                                                 *
  *  List of Server Side Protocols Used, these include:                         *
  *   - handshake_join_server: for joining server                               *
  *   - create_room: for creating a room                                        *
- *   - handshake_join_room: for joining room                                   *
+ *   - join_room: for joining room                                             *
  *                                                                             *
  *  More information enclosed within comments for each protocol                *
  *                                                                             *

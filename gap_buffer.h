@@ -7,8 +7,8 @@
 struct gap_buffer {
     int limit;      // Maximum capacity of a single buffer segment
     unsigned char** buffer;
-    int[MAX_USERS] gap_start;
-    int[MAX_USERS] gap_end;
+    int gap_start[MAX_USERS];
+    int gap_end[MAX_USERS];
 };
 typedef struct gap_buffer* gapbuf;
 

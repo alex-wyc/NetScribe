@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+
 #include "gap_buffer.h"
 #include "text_buffer.h"
 

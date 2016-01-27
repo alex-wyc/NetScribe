@@ -60,6 +60,7 @@
 int DEBUG = 0; // print statements, off by default
 
 const char *help = ""; // help doc string TODO
+const char buffer_request[] = "bufferreq";
 
 /* GLOBAL VARIABLES ***********************************************************/
 client *users_list[MAX_CLIENT_COUNT] = {0};
@@ -166,6 +167,10 @@ void handle_client (int socket){
                 client *sender = users_list[incoming->remote_client_id];
                 sender->room_id = join_room(incoming->remote_client_id, rooms_list[atoi(incoming->content)]);
                 sender->room = atoi(incoming->content);
+                int room_owner_fd = users_list[rooms_list[sender->room]->user_ids[0]]->socket_id;
+                write(room_owner_fd, buffer_request, sizeof(buffer_request)); // write to 0 index to get gbuf
+                read() // read to get gbuf
+                write() // write to new connection to get gbuf
             }
         }
 
