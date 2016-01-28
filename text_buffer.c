@@ -27,7 +27,7 @@ bool is_valid_tbuf(tbuf tb) {
     }
 
     dll temp = tb->start;
-    while (temp->next != NULL && temp->next != tb->end) {
+    while (temp->next != NULL && temp != tb->end) {
         if (temp != temp->next->prev) {
             printf("Doubly linked-ness ASSERTION FAILED\n");
             return false; // lmao pls
