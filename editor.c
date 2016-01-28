@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <time.h>
+#include <signal.h>
 
 #include "gap_buffer.h"
 #include "text_buffer.h"
@@ -55,6 +56,8 @@ int mode = EDIT_MODE; // by default
 char usernames[MAX_CLIENT_PER_ROOM][16] = {0}; // names of users
 struct sockaddr_in serv_addr;
 int DEBUG = 0;
+int SERVER_DIED = 0; // set to 1 if the client side is exiting because the server died
+message *to_send;
 
 /* debug: checks if debug is on, if so, print the statement, otherwise, do
  * nothing
@@ -165,12 +168,27 @@ int send_to_server(void *ptr, int sz) {
     close(TO_SERVER);
 }
 
+static void sigint_handler(int sigint) {
+    if (sigint == SIGINT) {
+        if (CONN) { // send off closing request
+            strncpy(to_send->cmd, "exit", 5);
+            send_to_server(to_send, sizeof(message));
+        }
+
+        endwin();
+        printf("Exiting...\n");
+        exit(1);
+    }
+}
+
 int main(int argc, char **argv) {
-    message *to_send = (message *)malloc(sizeof(message)); // message struct to talk to server with
+    to_send = (message *)malloc(sizeof(message)); // message struct to talk to server with
     message *received = (message *)malloc(sizeof(message));
     client *me = (client *)malloc(sizeof(client)); // ME!
     tbuf B = 0;
     char welcome_msg[100];
+
+    signal(SIGINT, sigint_handler);
 
     // handle command line args
     int i;
@@ -245,7 +263,6 @@ int main(int argc, char **argv) {
         // let us assume that you are creating a room here
         
         if (ROOM_NO != -1) { // join a given room
-            // TODO join transmision protocol
             me->room = ROOM_NO;
             strncpy(to_send->cmd, "join", 5);
             to_send->to_distribute = 1;
@@ -271,6 +288,7 @@ int main(int argc, char **argv) {
             debug("recv from server: in room %d\n", me->room);
             sprintf(welcome_msg, "<SERVER> You are now the owner of %d", me->room);
         }
+        to_send->to_distribute = 1;
     }
 
     //getchar();
@@ -392,20 +410,8 @@ int main(int argc, char **argv) {
             }
 
             if (strstr(received->cmd, SERVER_EXIT)) { // server died :(
-                time_t t;
-                struct tm *tinfo;
-                time(&t);
-                tinfo = localtime(&t);
-                char time_s[20];
-                if (!strftime(time_s, sizeof(time_s), "%H:%M:%S", tinfo)) {
-                    fprintf(stderr, "Error %d: %s", errno, strerror(errno));
-                    exit(1);
-                }
-                char to_put_up[100];
-                sprintf(to_put_up, "[%s] <SYSTEM>: the server has exited or the owner has destroyed the room -- now running local", time_s);
-
-                render_string(chatbar, to_put_up);              
-                CONN = false;
+                SERVER_DIED = 1;
+                break;
             }
 
             if (strstr(received->cmd, BUF_REQUEST)) { // you are the owner and the server asked you for the buffer
@@ -490,13 +496,18 @@ int main(int argc, char **argv) {
 
     }
 
-    if (CONN) { // send off closing request
+    if (CONN && !SERVER_DIED) { // send off closing request
         strncpy(to_send->cmd, "exit", 5);
         send_to_server(to_send, sizeof(message));
     }
 
     curs_set(vis);
     endwin();
-    printf("Exiting...\n");
+    if (SERVER_DIED) {
+        printf("The server has shutdown or the owner of the room has quit\n");
+    }
+    else {
+        printf("Exiting...\n");
+    }
     return 0;
 }

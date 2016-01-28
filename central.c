@@ -59,7 +59,7 @@
 
 int DEBUG = 0; // print statements, off by default
 
-const char *help = ""; // help doc string TODO
+const char *help = "./server.out [OPTIONS]: The server side program for NetScribe\n\t-d: debug mode on, prints debug statements\n\t-h: displays this help string\n"; // help doc string TODO
 
 /* GLOBAL VARIABLES ***********************************************************/
 client *users_list[MAX_CLIENT_COUNT] = {0};
@@ -175,7 +175,7 @@ void handle_client (int socket){
             }
 
             if (strstr(incoming->cmd, "exit")) {
-                debug("client %d has exited", incoming->remote_client_id);
+                debug("client %d has exited\n", incoming->remote_client_id);
 
                 if (incoming->local_client_id == 0) { // if this is the owner of the room
                     int room_id = users_list[incoming->remote_client_id]->room;
@@ -187,6 +187,10 @@ void handle_client (int socket){
                     for (c = 0 ; c < MAX_CLIENT_PER_ROOM ; c++) {
                         if (local->user_ids[c] != -1) {
                             write(users_list[local->user_ids[c]]->socket_id, incoming, sizeof(message));
+                            debug("Exit message written to user %d (%s)\n",
+                                    local->user_ids[c],
+                                    users_list[local->user_ids[c]]->name);
+
                             close(users_list[local->user_ids[c]]->socket_id); // close off connections
                             free(users_list[local->user_ids[c]]); // free the struct
                             users_list[local->user_ids[c]] = 0; // zero the pointer
@@ -244,6 +248,7 @@ void handle_cmd_line_args (int argc, char *argv[]){
 
                     case 'h':
                         printf("%s", help);
+                        exit(0);
                         break;
 
                     default:
