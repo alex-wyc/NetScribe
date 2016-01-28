@@ -25,6 +25,7 @@ bool is_tbuf(tbuf tb) {
     if (!is_valid_tbuf(tb)) {
         return false;
     }
+    printf("Valid tbuf: ASSERTION PASSED\n");
     bool is_empty = false;
     int curr_locs[MAX_USERS];
     int i; for (i = 0; i < MAX_USERS; i++) {
@@ -37,7 +38,9 @@ bool is_tbuf(tbuf tb) {
         count++;
 
         if (!is_gapbuf(tmp->data)) return false;
+        printf("Valid gapbuf @ node %d: ASSERTION PASSED\n", count);
         if (tmp->data->limit != 16) return false;
+        printf("Valid data length of 16 @ node %d: ASSERTION PASSED\n", count);
 
         is_empty = is_empty || gapbuf_empty(tmp->data);
 
@@ -46,9 +49,11 @@ bool is_tbuf(tbuf tb) {
                 curr_locs[i] = count;
             }
             if (count < curr_locs[i] && !gap_at_right(tmp->data, i)) {
+                printf("wtf on line 52, on node %d\n", count);
                 return false;
             }
             if (count > curr_locs[i] && !gap_at_left(tmp->data, i)) {
+                printf("wtf on line 56, on node %d\n", count);
                 return false;
             }
         }
@@ -57,6 +62,7 @@ bool is_tbuf(tbuf tb) {
     }
 
     if (is_empty && count != 1) {
+        printf("tbuf emptiness: ASSERTION FAILED\n");
         return false;
     }
 

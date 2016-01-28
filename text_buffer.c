@@ -5,6 +5,7 @@
  * To specify which user, the user will be passed as a parameter.
  */
 
+#include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -17,6 +18,7 @@
  */
 bool is_valid_tbuf(tbuf tb) {
     if (tb == NULL || tb->start == NULL || tb->end == NULL || tb->start == tb->end) {
+        printf("Non NULL data ASSERTION FAILED\n");
         return false;
     }
     bool has_current[MAX_USERS];
@@ -26,7 +28,10 @@ bool is_valid_tbuf(tbuf tb) {
 
     dll temp = tb->start;
     while (temp->next != NULL && temp->next != tb->end) {
-        if (temp != temp->next->prev) return false; // lmao pls
+        if (temp != temp->next->prev) {
+            printf("Doubly linked-ness ASSERTION FAILED\n");
+            return false; // lmao pls
+        }
         for (i = 0; i < MAX_USERS; i++) {
             if (temp == tb->current[i]) has_current[i] = true;
         }
@@ -36,6 +41,9 @@ bool is_valid_tbuf(tbuf tb) {
     bool has_all_currents = true;
     for (i = 0; has_all_currents && i < MAX_USERS; i++) {
         has_all_currents = has_all_currents && has_current[i];
+        if (!has_all_currents) {
+            printf("Gapbuf user %d does not have a current node\n", i);
+        }
     }
 
     return has_all_currents && temp->next != NULL && temp->next->prev == temp;
