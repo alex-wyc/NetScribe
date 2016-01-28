@@ -65,6 +65,7 @@ const char buffer_request[] = "bufferreq";
 /* GLOBAL VARIABLES ***********************************************************/
 client *users_list[MAX_CLIENT_COUNT] = {0};
 subserver *rooms_list[MAX_SUBSERVER_COUNT] = {0};
+int from_client;
 
 /* MAIN ***********************************************************************/
 
@@ -80,7 +81,9 @@ static void sighandler(int signo) {
         while (users_list[i] != 0) {
             write(users_list[i]->socket_id, &exitMSG, sizeof(exitMSG));
             close(users_list[i]->socket_id);
+            i++;
         }
+        close(from_client);
         fprintf(stderr, "<SERVER> Server exited.\n");
         exit(1);
     }
@@ -88,7 +91,7 @@ static void sighandler(int signo) {
 
 int main(int argc, char *argv[]) {
     // vars
-    int from_client, fd, ret_val;
+    int fd, ret_val;
 
     // command line argument parser
     handle_cmd_line_args(argc, argv);
@@ -104,7 +107,6 @@ int main(int argc, char *argv[]) {
     // handle requests
     while (1) {
         fd = accept(from_client, NULL, NULL);
-        printf("No errors here\n");
 
         handle_client(fd);
     }
@@ -120,17 +122,25 @@ int main(int argc, char *argv[]) {
  *     socket: the fd of the incoming socket connection
  */
 void handle_client (int socket){
-    message *incoming;
+    message *incoming = (message *)malloc(sizeof(message));
     int ret_val, c;
 
-    ret_val = read(socket, incoming, sizeof(message)); // FIXME problems here
-    printf("%d\n", ret_val);
+    ret_val = read(socket, incoming, sizeof(message));
     check_error(ret_val);
 
-    if (strstr(incoming->cmd, CONN_REQUEST) == 0) { // if this is a conn request
+    debug("received from client %d (%s) from socket %d: %s %s\n",
+            incoming->remote_client_id,
+            users_list[incoming->remote_client_id]->name,
+            socket,
+            incoming->cmd,
+            incoming->content);
+
+    if (strstr(incoming->cmd, CONN_REQUEST)) { // if this is a conn request
         for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
             if (users_list[c] == 0) {
-                users_list[c] = handshake_join_server(socket, c, incoming);
+                users_list[c] = handshake_join_server(socket, c, incoming->content);
+                debug("connection added: number %d: %s\n", c, users_list[c]->name);
+                return;
             }
         }
     }
@@ -150,6 +160,7 @@ void handle_client (int socket){
                 //read() // read to get gbuf
                 //write() // write to new connection to get gbuf
                 close(socket);
+                return;
             }
 
             if (strstr(incoming->cmd, "exit")) {
@@ -159,6 +170,7 @@ void handle_client (int socket){
                 free(users_list[incoming->remote_client_id]); // free the struct
                 users_list[incoming->remote_client_id] = 0; // remove it to NULL
                 close(socket);
+                return;
             }
         }
 
@@ -168,8 +180,14 @@ void handle_client (int socket){
                     if (rooms_list[c] == 0) {
                         client *sender = users_list[incoming->remote_client_id];
                         rooms_list[c] = create_new_room(sender->socket_id, incoming->remote_client_id, c);
+                        debug("new room %d created\n", c);
                         sender->room = c;
                         sender->room_id = 0;
+                        debug("client %d (%s) is now in room %d\n",
+                                incoming->remote_client_id,
+                                users_list[incoming->remote_client_id]->name,
+                                users_list[incoming->remote_client_id]->room);
+                        return;
                     }
                 }
             }

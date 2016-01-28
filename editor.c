@@ -36,6 +36,9 @@
 /* server side definitions */
 #define SERVER_ADDR "127.0.0.1"
 
+#define EDIT_MODE 0
+#define CHAT_MODE 1
+#define SAVE_MODE 2
 
 #define highlight(x) x | A_STANDOUT
 
@@ -47,6 +50,7 @@ int CONN = 1; // if we access the network
 int ROOM_NO = 0; // room number of the client
 int FROM_SERVER = -1;
 int TO_SERVER = -1;
+int mode = EDIT_MODE; // by default
 
 /* render_char: renders the character, and if the pointer points to the
  * character it will be hihglighted
@@ -90,6 +94,9 @@ void render_tbuf(tbuf B, WINDOW *w) {
     printf("initial setup done\n");
 
     dll L;
+    if (!B->start->next) {
+        printf("yeah that's null\n");
+    }
     printf("%p\n", B->start->next);
     for (L = B->start->next; L != B->end; L = L->next) {
         printf("gap buf rendered\n");
@@ -99,7 +106,6 @@ void render_tbuf(tbuf B, WINDOW *w) {
     // TODO add case for if the cursor is at the very bottom
 
     wrefresh(w);
-    printf("return\n");
 }
 
 /* renders a string within a WINDOW */
@@ -120,23 +126,18 @@ void render_string(WINDOW *w, char *str) {
 
 /* renders the header for the text editor */
 void render_topbar(WINDOW *w) {
-    render_string(w, "NetScribe, the terminal based cross-network editor -- ^X to exit, ^L to refresh the page");
+    render_string(w, "NetScribe, the terminal based cross-network editor");
 }
 
 void render_botbar(WINDOW *w) {
-    werase(w);
-    int i; 
-    // first clear the bar
-    for (i = getbegx(w); i < getmaxx(w) ; i++) {
-        waddch(w, highlight(' '));
-    }
+    render_string(w, "^X Exit \t ^L Clear \t ^O Write \t ^H Chat");
 }
 
 int main(int argc, char **argv) {
     message *to_send = (message *)malloc(sizeof(message)); // message struct to talk to server with
     message *received = (message *)malloc(sizeof(message));
     client *me = (client *)malloc(sizeof(client)); // ME!
-    tbuf B;
+    tbuf B = 0;
 
     // handle command line args
     int i;
@@ -168,6 +169,10 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (!B) {
+        B = new_tbuf();
+    }
+
     // build socket connection
     if (CONN) {
         if ((FROM_SERVER = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -194,9 +199,10 @@ int main(int argc, char **argv) {
         // 1. join server request
         strncpy(to_send->cmd, CONN_REQUEST, sizeof(CONN_REQUEST));
         strncpy(to_send->content, NAME, sizeof(NAME));
+        printf("Name sent to server: %s\n", to_send->content);
         write(FROM_SERVER, to_send, sizeof(message));
-        read(FROM_SERVER, me, sizeof(client));
-        to_send->remote_client_id = me->socket_id;
+        read(FROM_SERVER, &to_send->remote_client_id, sizeof(int));
+        printf("Received from server: %d\n", to_send->remote_client_id);
 
         // let us assume that you are creating a room here
         
@@ -205,22 +211,26 @@ int main(int argc, char **argv) {
         }
         else { // create a room
             strncpy(to_send->cmd, "new", 4);
+            printf("command sent: %s\n", to_send->cmd);
             if (connect(TO_SERVER, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-                fprintf(stderr, "Fatal - Connection to server failed\n");
+                fprintf(stderr, "Fatal - Connection to server failed when creating room\n");
                 close(1);
             }
-            write(TO_SERVER, to_send, sizeof(to_send));
+            write(TO_SERVER, to_send, sizeof(message));
             read(FROM_SERVER, &ROOM_NO, sizeof(int));
             to_send->local_client_id = 0; // join a room = 0
             me->room = ROOM_NO;
             me->room_id = 0;
+            printf("recv from server: in room %d\n", me->room);
         }
     }
+
+    //getchar();
 
     // setup GUI
     WINDOW *mainwin = initscr();
     cbreak();
-    noecho();
+    //noecho();
     keypad(mainwin, true);
     int vis = curs_set(0);
 
@@ -228,6 +238,8 @@ int main(int argc, char **argv) {
     int nlines = getmaxy(mainwin);
     int begx = getbegx(mainwin);
     int begy = getbegy(mainwin);
+
+    printf("%d, %d, %d, %d\n", ncols, nlines, begx, begy);
 
     WINDOW *canvas = subwin(mainwin,
                             nlines - 2, // save 2 lines for bottom status
@@ -238,6 +250,7 @@ int main(int argc, char **argv) {
     WINDOW *topbar = subwin(mainwin, 1, ncols, begy, begx);
     WINDOW *chatbar = subwin(mainwin, 1, ncols, begy + 1, begx);
     WINDOW *botbar = subwin(mainwin, 1, ncols, nlines - 2, begx);
+    WINDOW *inputbar = subwin(mainwin, 1, ncols, nlines - 1, begx);
 
     render_topbar(topbar);
     render_string(chatbar, "");

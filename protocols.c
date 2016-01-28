@@ -34,15 +34,14 @@
  * client joins, writes to the file descriptor the client class basically
  * TODO long description
  */
-client *handshake_join_server (int fd, int index, message *incoming) {
+client *handshake_join_server (int fd, int index, char *name_from_msg) {
     client *new_connection = (client *)malloc(sizeof(client));
     new_connection->socket_id = fd;
 
-    strncpy(new_connection->name,
-            incoming->content,
-            sizeof(incoming->content));
+    strncpy(new_connection->name, name_from_msg, sizeof(new_connection->name));
+            //sizeof(incoming->content));
 
-    write(fd, new_connection, sizeof(client));
+    write(fd, &index, sizeof(int));
     return new_connection;
 }
 
