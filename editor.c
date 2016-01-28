@@ -27,6 +27,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <time.h>
 
 #include "gap_buffer.h"
 #include "text_buffer.h"
@@ -51,6 +52,7 @@ int ROOM_NO = 0; // room number of the client
 int FROM_SERVER = -1;
 int TO_SERVER = -1;
 int mode = EDIT_MODE; // by default
+char usernames[MAX_CLIENT_PER_ROOM][16] = {0}; // names of users
 
 /* render_char: renders the character, and if the pointer points to the
  * character it will be hihglighted
@@ -137,6 +139,7 @@ int main(int argc, char **argv) {
     message *to_send = (message *)malloc(sizeof(message)); // message struct to talk to server with
     message *received = (message *)malloc(sizeof(message));
     client *me = (client *)malloc(sizeof(client)); // ME!
+    struct sockaddr_in serv_addr;
     tbuf B = 0;
 
     // handle command line args
@@ -185,7 +188,6 @@ int main(int argc, char **argv) {
             close(1);
         }
 
-        struct sockaddr_in serv_addr;
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(CLIENT_PORT);
         serv_addr.sin_addr.s_addr = inet_addr(SERVER_ADDR);
@@ -218,9 +220,10 @@ int main(int argc, char **argv) {
             }
             write(TO_SERVER, to_send, sizeof(message));
             read(FROM_SERVER, &ROOM_NO, sizeof(int));
-            to_send->local_client_id = 0; // join a room = 0
+            to_send->local_client_id = 0; // create a room = 0
             me->room = ROOM_NO;
             me->room_id = 0;
+            strncpy(usernames[me->room_id], NAME, sizeof(NAME));
             printf("recv from server: in room %d\n", me->room);
         }
     }
@@ -276,30 +279,7 @@ int main(int argc, char **argv) {
         if (FD_ISSET(STDIN_FILENO, &readfds)) { // reading from stdin
             read(STDIN_FILENO, &c, 1);
 
-            if (c[0] == 27) {
-                read(STDIN_FILENO, &c[1], 2);
-                switch (c[2]) {
-                    case 'C': // move cursor right
-                        backward_char(B, me->room_id);
-                        break;
-
-                    case 'D':
-                        forward_char(B, me->room_id);
-                        break;
-                }
-            }
-
-            else if (c[0] == 24) { // ^X --> exit
-                curs_set(vis);
-                endwin();
-                if (CONN) { // send off closing request
-                    // TODO send closing request to server
-                }
-                printf("Exiting...\n");
-                return 0;
-            }
-
-            else if (c[0] == 12) { // ^L --> redraw
+            if (c[0] == 12) { // ^L --> redraw
                 wclear(mainwin);
                 render_topbar(topbar);
                 render_string(chatbar, "");
@@ -307,12 +287,49 @@ int main(int argc, char **argv) {
                 wrefresh(mainwin);
             }
 
-            else if (c[0] == 127) { // backspace
-                delete_char(B, me->room_id);
-            }
+            else { // these will be sent
+                strncpy(to_send->cmd, "edit", 5);
 
-            else if (0 < c[0] && c[0] < 127) { // other characters
-                insert_char(B, c[0], me->room_id);
+                if (c[0] == 27) {
+                    read(STDIN_FILENO, &c[1], 2);
+                    switch (c[2]) {
+                        case 'C': // move cursor right
+                            backward_char(B, me->room_id);
+                            break;
+
+                        case 'D':
+                            forward_char(B, me->room_id);
+                            break;
+                    }
+                    memcpy(to_send->content, c, 3);
+                }
+
+                else if (c[0] == 24) { // ^X --> exit
+                    curs_set(vis);
+                    endwin();
+                    if (CONN) { // send off closing request
+                        strncpy(to_send->cmd, "exit", 5);
+                    }
+                    printf("Exiting...\n");
+                    return 0;
+                }
+
+                else if (c[0] == 127) { // backspace
+                    delete_char(B, me->room_id);
+                    memcpy(to_send->content, c, 3);
+                }
+
+                else if (0 < c[0] && c[0] < 127) { // other characters
+                    insert_char(B, c[0], me->room_id);
+                    memcpy(to_send->content, c, 3);
+                }
+
+                if (connect(TO_SERVER, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+                    fprintf(stderr, "Fatal - Connection to server failed when creating room\n");
+                    close(1);
+                }
+
+                write(TO_SERVER, to_send, sizeof(message));
             }
         }
 
@@ -321,15 +338,59 @@ int main(int argc, char **argv) {
             int c_user = received->local_client_id;
 
             if (strstr(received->cmd, "chat")) { // this is a chat command
-                render_string(chatbar, received->content); // FIXME more detail later
+                time_t t;
+                struct tm *tinfo;
+                time(&t);
+                tinfo = localtime(&t);
+                char time_s[20];
+                if (!strftime(time_s, sizeof(time_s), "%H:%M:%S", tinfo)) {
+                    fprintf(stderr, "Error %d: %s", errno, strerror(errno));
+                    exit(1);
+                }
+                char to_put_up[100];
+                sprintf(to_put_up, "[%s] %s: %s", time_s,
+                        usernames[received->local_client_id],
+                        received->content);
+
+                render_string(chatbar, to_put_up);
             }
 
             if (strstr(received->cmd, "join")) { // if new user joins
-                // TODO handle join client
+                strncpy(usernames[received->local_client_id], received->content, 16);
+                time_t t;
+                struct tm *tinfo;
+                time(&t);
+                tinfo = localtime(&t);
+                char time_s[20];
+                if (!strftime(time_s, sizeof(time_s), "%H:%M:%S", tinfo)) {
+                    fprintf(stderr, "Error %d: %s", errno, strerror(errno));
+                    exit(1);
+                }
+                char to_put_up[100];
+                sprintf(to_put_up, "[%s] <SERVER>: %s has joined", time_s,
+                        usernames[received->local_client_id]);
+
+                render_string(chatbar, to_put_up);
+                // TODO -- set cursor
             }
 
             if (strstr(received->cmd, "exit")) { // if user exits
-                // TODO handle if user exits
+                time_t t;
+                struct tm *tinfo;
+                time(&t);
+                tinfo = localtime(&t);
+                char time_s[20];
+                if (!strftime(time_s, sizeof(time_s), "%H:%M:%S", tinfo)) {
+                    fprintf(stderr, "Error %d: %s", errno, strerror(errno));
+                    exit(1);
+                }
+                char to_put_up[100];
+                sprintf(to_put_up, "[%s] <SERVER>: %s has exited", time_s,
+                        usernames[received->local_client_id]);
+
+                render_string(chatbar, to_put_up);
+                memset(usernames[received->local_client_id], 0, sizeof(usernames[received->local_client_id]));
+                // TODO -- remove cursor
             }
 
             if (strstr(received->cmd, "edit")) {
