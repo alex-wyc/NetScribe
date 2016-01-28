@@ -5,9 +5,13 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "gap_buffer.h"
 #include "text_buffer.h"
@@ -197,5 +201,26 @@ void delete_char(tbuf tb, int user) {
         tbuf_delete_current(tb, user);
     }
     assert(is_tbuf(tb));
+}
+
+/*
+ * Reads from a specified filename and puts it into a tbuf.
+ * CAUTION! IMPLEMENTATION EXTREMELY LAZY!
+ */
+tbuf read_from_file(char *filename) {
+    int INFILE = open(filename, O_RDWR);
+    if (errno) {
+        printf("%s\n", strerror(errno));
+        return NULL;
+    }
+    char tmp[20480];
+    int nbytes = read(INFILE, &tmp, sizeof(char) * 20480);
+    tbuf retval = new_tbuf();
+    int i; for (i = 0; i < nbytes; i++) {
+        insert_char(retval, tmp[i], 0);
+    }
+    retval->current[0] = retval->current[1];
+    close(INFILE);
+    return retval;
 }
 
