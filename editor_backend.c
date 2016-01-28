@@ -224,3 +224,35 @@ tbuf read_from_file(char *filename) {
     return retval;
 }
 
+/*
+ * Writes the text in a tbuf to a file
+ */
+void write_to_file(tbuf tb, char *filename) {
+    int OUTFILE = open(filename, O_WRONLY);
+    if (errno) {
+        printf("%s\n", strerror(errno));
+        return;
+    }
+    dll tmp = tb->start->next;
+    int i;
+    while (tmp != tb->end) {
+        for (i = 0; i < 16; i++) {
+            if (tmp->data->buffer[i][0]) {
+                write(OUTFILE, &(tmp->data->buffer[i][0]), sizeof(char));
+                if (errno) {
+                    printf("%s\n", strerror(errno));
+                    return;
+                }
+            }
+        }
+    }
+    // Write a string terminator
+    i = 0;
+    write(OUTFILE, &i, sizeof(char)); // Yay i luv bits :D
+    if (errno) {
+        printf("%s\n", strerror(errno));
+        return;
+    }
+    close(OUTFILE);
+}
+
