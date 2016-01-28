@@ -161,17 +161,20 @@ void handle_client (int socket){
                 //read() // read to get gbuf
                 //write() // write to new connection to get gbuf
                 close(socket);
-                return;
+                //return;
             }
 
             if (strstr(incoming->cmd, "exit")) {
                 debug("client %d has exited", incoming->remote_client_id);
+                if (incoming->local_client_id == 0) { // if this is the owner of the room
+                    f
+                }
                 local->user_ids[incoming->local_client_id] = -1; // remove from subserv
                 close(users_list[incoming->remote_client_id]->socket_id); // remove the fd
                 free(users_list[incoming->remote_client_id]); // free the struct
                 users_list[incoming->remote_client_id] = 0; // remove it to NULL
                 close(socket);
-                return;
+                //return;
             }
 
             distribute(local->user_ids, MAX_CLIENT_PER_ROOM, users_list, *incoming);
@@ -190,11 +193,11 @@ void handle_client (int socket){
                                 incoming->remote_client_id,
                                 users_list[incoming->remote_client_id]->name,
                                 users_list[incoming->remote_client_id]->room);
+                        close(socket);
                         return;
                     }
                 }
             }
-            close(socket);
         }
     }
 }

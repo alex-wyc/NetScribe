@@ -45,8 +45,8 @@
 
 
 int USER_ME; // this is the local index of me
-char NAME[16];
-char *HELP = ""; //help doc
+char NAME[16] = {0};
+char *HELP = "./client.out [OPTIONS] [FILENAME]: client side of NetScribe, the cross-network text-editor.\nOptions:\n\t-n <NAME>: REQUIRED unless -l flag is supplied, specifies the name of the user on the network\n\t-j <ROOM NO>: joins a pre-existing room instead of creating a new room\n\t-l: local flag, does not join the network\n\t-h: help flag, prints out this help stirng and exits\n"; //help doc
 int CONN = 1; // if we access the network
 int ROOM_NO = 0; // room number of the client
 int FROM_SERVER = -1;
@@ -141,6 +141,7 @@ int main(int argc, char **argv) {
     client *me = (client *)malloc(sizeof(client)); // ME!
     struct sockaddr_in serv_addr;
     tbuf B = 0;
+    char welcome_msg[100];
 
     // handle command line args
     int i;
@@ -154,6 +155,7 @@ int main(int argc, char **argv) {
 
                     case 'h':
                         printf("%s\n", HELP);
+                        exit(1);
                         break;
 
                     case 'l': // local use
@@ -165,15 +167,20 @@ int main(int argc, char **argv) {
                         break;
                 }
             }
-            else {
+            else if(i > 0) {
                 B = read_from_file(argv[i]);
-                printf("reading done\n");
+                printf("reading done (%s)\n", argv[i]);
             }
         }
     }
 
     if (!B) {
         B = new_tbuf();
+    }
+
+    if (!NAME[0]) { // name is not set yet
+        printf("%s\n", HELP);
+        exit(1);
     }
 
     // build socket connection
@@ -209,7 +216,8 @@ int main(int argc, char **argv) {
         // let us assume that you are creating a room here
         
         if (ROOM_NO) { // join a given room
-            // TODO
+            // TODO join transmision protocol
+            sprintf(welcome_msg, "<SERVER> You have just joined room %d", me->room_id);
         }
         else { // create a room
             strncpy(to_send->cmd, "new", 4);
@@ -225,6 +233,7 @@ int main(int argc, char **argv) {
             me->room_id = 0;
             strncpy(usernames[me->room_id], NAME, sizeof(NAME));
             printf("recv from server: in room %d\n", me->room);
+            sprintf(welcome_msg, "<SERVER> You are now the owner of %d", me->room_id);
         }
     }
 
@@ -256,7 +265,7 @@ int main(int argc, char **argv) {
     WINDOW *inputbar = subwin(mainwin, 1, ncols, nlines - 1, begx);
 
     render_topbar(topbar);
-    render_string(chatbar, "");
+    render_string(chatbar, welcome_msg);
     render_botbar(botbar);
 
     printf("setup done\n");
@@ -305,13 +314,7 @@ int main(int argc, char **argv) {
                 }
 
                 else if (c[0] == 24) { // ^X --> exit
-                    curs_set(vis);
-                    endwin();
-                    if (CONN) { // send off closing request
-                        strncpy(to_send->cmd, "exit", 5);
-                    }
-                    printf("Exiting...\n");
-                    return 0;
+                    break; // exit out of the listening loop
                 }
 
                 else if (c[0] == 127) { // backspace
@@ -333,7 +336,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        else if (FD_ISSET(FROM_SERVER, &readfds)) {
+        else if (FD_ISSET(FROM_SERVER, &readfds)) { // receive msg from server
             read(FROM_SERVER, received, sizeof(message));
             int c_user = received->local_client_id;
 
@@ -391,6 +394,23 @@ int main(int argc, char **argv) {
                 render_string(chatbar, to_put_up);
                 memset(usernames[received->local_client_id], 0, sizeof(usernames[received->local_client_id]));
                 // TODO -- remove cursor
+            }
+
+            if (strstr(received->cmd, SERVER_EXIT)) { // server died :(
+                time_t t;
+                struct tm *tinfo;
+                time(&t);
+                tinfo = localtime(&t);
+                char time_s[20];
+                if (!strftime(time_s, sizeof(time_s), "%H:%M:%S", tinfo)) {
+                    fprintf(stderr, "Error %d: %s", errno, strerror(errno));
+                    exit(1);
+                }
+                char to_put_up[100];
+                sprintf(to_put_up, "[%s] <SYSTEM>: the server has exited or the owner has destroyed the room -- now running local", time_s);
+
+                render_string(chatbar, to_put_up);              
+                CONN = false;
             }
 
             if (strstr(received->cmd, "edit")) {
