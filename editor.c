@@ -234,7 +234,10 @@ int main(int argc, char **argv) {
     }
     
     if (!B) {
+
         B = new_tbuf();
+        printf("is this it?\n");
+
     }
 
 
@@ -293,6 +296,10 @@ int main(int argc, char **argv) {
         }
         to_send->to_distribute = 1;
     }
+    else {
+        sprintf(welcome_msg, "You are currently running NetScribe locally");
+    }
+
 
     //getchar();
 
@@ -324,7 +331,7 @@ int main(int argc, char **argv) {
     render_topbar(topbar);
     render_string(chatbar, welcome_msg);
     render_botbar(botbar);
-    wrefresh(mainwin);
+    //wrefresh(mainwin);
 
     debug("setup done\n");
 
