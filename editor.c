@@ -50,7 +50,7 @@ char NAME[16] = {0};
 char *HELP = "./client.out [OPTIONS] [FILENAME]: client side of NetScribe, the cross-network text-editor.\nOptions:\n\t-n <NAME>: REQUIRED unless -l flag is supplied, specifies the name of the user on the network\n\t-j <ROOM NO>: joins a pre-existing room instead of creating a new room\n\t-l: local flag, does not join the network\n\t-t: test mode, does not render the text buffer, but shows the debug statements\n\t-h: help flag, prints out this help stirng and exits\n"; //help doc
 int CONN = 1; // if we access the network
 int ROOM_NO = -1; // room number of the client
-int FROM_SERVER = -1;
+int FROM_SERVER = 1;
 int TO_SERVER = -1;
 int mode = EDIT_MODE; // by default
 char usernames[MAX_CLIENT_PER_ROOM][16] = {0}; // names of users
@@ -225,7 +225,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (!NAME[0]) { // name is not set yet
+    if (!NAME[0] && CONN) { // name is not set yet and connecting to network
         printf("%s\n", HELP);
         exit(1);
     }
@@ -296,7 +296,7 @@ int main(int argc, char **argv) {
     // setup GUI
     WINDOW *mainwin = initscr();
     cbreak();
-    //noecho();
+    noecho();
     keypad(mainwin, true);
     int vis = curs_set(0);
 
@@ -332,8 +332,11 @@ int main(int argc, char **argv) {
     FD_ZERO(&current);
 
     FD_SET(STDIN_FILENO, &readfds);
-    FD_SET(FROM_SERVER, &readfds);
-   
+
+    if (CONN) {
+        FD_SET(FROM_SERVER, &readfds);
+    }
+
     while (1) {
         if (!DEBUG) {
             render_tbuf(B, canvas);
