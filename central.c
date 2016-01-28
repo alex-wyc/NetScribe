@@ -104,6 +104,7 @@ int main(int argc, char *argv[]) {
     // handle requests
     while (1) {
         fd = accept(from_client, NULL, NULL);
+        printf("No errors here\n");
 
         handle_client(fd);
     }
@@ -117,14 +118,13 @@ int main(int argc, char *argv[]) {
  * 
  * arguments:
  *     socket: the fd of the incoming socket connection
- *
- * TODO what it actually does
  */
 void handle_client (int socket){
     message *incoming;
     int ret_val, c;
 
-    ret_val = read(socket, incoming, sizeof(message));
+    ret_val = read(socket, incoming, sizeof(message)); // FIXME problems here
+    printf("%d\n", ret_val);
     check_error(ret_val);
 
     if (strstr(incoming->cmd, CONN_REQUEST) == 0) { // if this is a conn request
@@ -140,6 +140,17 @@ void handle_client (int socket){
         if (incoming->to_distribute) { // if this is a command to distribute
             subserver *local = rooms_list[users_list[incoming->remote_client_id]->room];
             distribute(local->user_ids, MAX_CLIENT_PER_ROOM, users_list, *incoming);
+
+            if (strstr(incoming->cmd, "join")) {
+                client *sender = users_list[incoming->remote_client_id];
+                sender->room_id = join_room(incoming->remote_client_id, rooms_list[atoi(incoming->content)]);
+                sender->room = atoi(incoming->content);
+                int room_owner_fd = users_list[rooms_list[sender->room]->user_ids[0]]->socket_id;
+                write(room_owner_fd, buffer_request, sizeof(buffer_request)); // write to 0 index to get gbuf
+                //read() // read to get gbuf
+                //write() // write to new connection to get gbuf
+                close(socket);
+            }
 
             if (strstr(incoming->cmd, "exit")) {
                 debug("client %d has exited", incoming->remote_client_id);
@@ -162,19 +173,8 @@ void handle_client (int socket){
                     }
                 }
             }
-
-            if (strstr(incoming->cmd, "join")) {
-                client *sender = users_list[incoming->remote_client_id];
-                sender->room_id = join_room(incoming->remote_client_id, rooms_list[atoi(incoming->content)]);
-                sender->room = atoi(incoming->content);
-                int room_owner_fd = users_list[rooms_list[sender->room]->user_ids[0]]->socket_id;
-                write(room_owner_fd, buffer_request, sizeof(buffer_request)); // write to 0 index to get gbuf
-                read() // read to get gbuf
-                write() // write to new connection to get gbuf
-            }
+            close(socket);
         }
-
-        close(socket);
     }
 }
 
