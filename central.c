@@ -138,7 +138,7 @@ void handle_client (int socket){
         for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
             if (users_list[c] == 0) {
                 users_list[c] = handshake_join_server(socket, c, incoming->content);
-                debug("connection added: number %d: %s\n", c, users_list[c]->name);
+                debug("connection added: number %d: %s (at socket %d)\n", c, users_list[c]->name, users_list[c]->socket_id);
                 return;
             }
         }
@@ -151,25 +151,37 @@ void handle_client (int socket){
 
             if (strstr(incoming->cmd, "join")) {
                 client *sender = users_list[incoming->remote_client_id];
-                sender->room_id = join_room(incoming->remote_client_id, rooms_list[atoi(incoming->content)]);
+                sender->room = atoi(incoming->content);
+                debug("client %d (%s) asked to join room %d\n", incoming->remote_client_id, sender->name, sender->room);
+                sender->room_id = join_room(incoming->remote_client_id, rooms_list[sender->room]);
                 incoming->local_client_id = sender->room_id; // modify before distribution
                 strncpy(incoming->content, sender->name, 16); // modify before distribution
-                sender->room = atoi(incoming->content);
                 int room_owner_fd = users_list[rooms_list[sender->room]->user_ids[0]]->socket_id;
                 message *tmp = (message *)malloc(sizeof(message));
                 strncpy(tmp->cmd, BUF_REQUEST, sizeof(BUF_REQUEST));
                 write(room_owner_fd, tmp, sizeof(message)); // write to 0 index to get gbuf
+                debug("buffer request sent to owner of the room (%d: %s at fd %d)\n",
+                        rooms_list[sender->room]->user_ids[0],
+                        users_list[rooms_list[sender->room]->user_ids[0]]->name,
+                        room_owner_fd);
                 char *buf = malloc(20480); // get array from owner
                 read(room_owner_fd, buf, 20480); // read to get gbuf
+                debug("got buffer\n");
                 write(sender->socket_id, buf, 20480); // write to new connection to get gbuf
+                write(sender->socket_id, &sender->room_id, sizeof(int));
+                debug("sent buffer to new client\n");
                 close(socket);
                 //return;
             }
 
             if (strstr(incoming->cmd, "exit")) {
                 debug("client %d has exited", incoming->remote_client_id);
+
                 if (incoming->local_client_id == 0) { // if this is the owner of the room
-                    int local_id = users_list[incoming->remote_client_id]->room;
+                    int room_id = users_list[incoming->remote_client_id]->room;
+                    debug("owner of room %d (client %d %s) has exited\n", room_id,
+                            incoming->remote_client_id,
+                            users_list[incoming->remote_client_id]->name);
                     strncpy(incoming->cmd, SERVER_EXIT, sizeof(SERVER_EXIT)); // bai
                     // kill off all connected users as well
                     for (c = 0 ; c < MAX_CLIENT_PER_ROOM ; c++) {
@@ -181,10 +193,11 @@ void handle_client (int socket){
                         }
                     }
                     free(local); // destroy the room
-                    rooms_list[local_id] = 0; // reset to NULL
+                    rooms_list[room_id] = 0; // reset to NULL
                     close(socket);
                     return;
                 }
+
                 local->user_ids[incoming->local_client_id] = -1; // remove from subserv
                 close(users_list[incoming->remote_client_id]->socket_id); // remove the fd
                 free(users_list[incoming->remote_client_id]); // free the struct

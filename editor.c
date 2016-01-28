@@ -46,13 +46,28 @@
 
 int USER_ME; // this is the local index of me
 char NAME[16] = {0};
-char *HELP = "./client.out [OPTIONS] [FILENAME]: client side of NetScribe, the cross-network text-editor.\nOptions:\n\t-n <NAME>: REQUIRED unless -l flag is supplied, specifies the name of the user on the network\n\t-j <ROOM NO>: joins a pre-existing room instead of creating a new room\n\t-l: local flag, does not join the network\n\t-h: help flag, prints out this help stirng and exits\n"; //help doc
+char *HELP = "./client.out [OPTIONS] [FILENAME]: client side of NetScribe, the cross-network text-editor.\nOptions:\n\t-n <NAME>: REQUIRED unless -l flag is supplied, specifies the name of the user on the network\n\t-j <ROOM NO>: joins a pre-existing room instead of creating a new room\n\t-l: local flag, does not join the network\n\t-t: test mode, does not render the text buffer, but shows the debug statements\n\t-h: help flag, prints out this help stirng and exits\n"; //help doc
 int CONN = 1; // if we access the network
-int ROOM_NO = 0; // room number of the client
+int ROOM_NO = -1; // room number of the client
 int FROM_SERVER = -1;
 int TO_SERVER = -1;
 int mode = EDIT_MODE; // by default
 char usernames[MAX_CLIENT_PER_ROOM][16] = {0}; // names of users
+struct sockaddr_in serv_addr;
+int DEBUG = 0;
+
+/* debug: checks if debug is on, if so, print the statement, otherwise, do
+ * nothing
+ */
+void debug (char *format, ...){
+    if (DEBUG) {
+        va_list strings;
+        int done;
+        va_start(strings, format);
+        done = vfprintf(stdout, format, strings);
+        va_end(strings);
+    }
+}
 
 /* render_char: renders the character, and if the pointer points to the
  * character it will be hihglighted
@@ -90,18 +105,18 @@ void render_gapbuf (gapbuf G, WINDOW *w){
 
 /* render_tbuf: renders an entire text buffer */
 void render_tbuf(tbuf B, WINDOW *w) {
-    printf("function is called\n");
+    debug("function is called\n");
     wmove(w, 0, 0);
     werase(w);
-    printf("initial setup done\n");
+    debug("initial setup done\n");
 
     dll L;
     if (!B->start->next) {
-        printf("yeah that's null\n");
+        debug("yeah that's null\n");
     }
-    printf("%p\n", B->start->next);
+    debug("%p\n", B->start->next);
     for (L = B->start->next; L != B->end; L = L->next) {
-        printf("gap buf rendered\n");
+        debug("gap buf rendered\n");
         render_gapbuf(L->data, w);
     }
 
@@ -135,11 +150,25 @@ void render_botbar(WINDOW *w) {
     render_string(w, "^X Exit \t ^L Clear \t ^O Write \t ^H Chat");
 }
 
+// creates a socket, binds it, connects, sends info then destroys it
+int send_to_server(void *ptr, int sz) {
+    int TO_SERVER;
+    if ((TO_SERVER = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        fprintf(stderr, "Fatal - Cannot create socket\n");
+        close(1);
+    }
+    if (connect(TO_SERVER, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+        fprintf(stderr, "connect %d: %s\n", errno, strerror(errno));
+        close(1);
+    }
+    write(TO_SERVER, ptr, sz);
+    close(TO_SERVER);
+}
+
 int main(int argc, char **argv) {
     message *to_send = (message *)malloc(sizeof(message)); // message struct to talk to server with
     message *received = (message *)malloc(sizeof(message));
     client *me = (client *)malloc(sizeof(client)); // ME!
-    struct sockaddr_in serv_addr;
     tbuf B = 0;
     char welcome_msg[100];
 
@@ -165,32 +194,32 @@ int main(int argc, char **argv) {
                     case 'j': // not creating a room, but joining
                         ROOM_NO = atoi(argv[++i]);
                         break;
+
+                    case 't':
+                        DEBUG = 1;
+                        break;
                 }
             }
             else if(i > 0) {
                 B = read_from_file(argv[i]);
-                printf("reading done (%s)\n", argv[i]);
+                debug("reading done (%s)\n", argv[i]);
             }
         }
-    }
-
-    if (!B) {
-        B = new_tbuf();
     }
 
     if (!NAME[0]) { // name is not set yet
         printf("%s\n", HELP);
         exit(1);
     }
+    
+    if (!B) {
+        B = new_tbuf();
+    }
+
 
     // build socket connection
     if (CONN) {
         if ((FROM_SERVER = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-            fprintf(stderr, "Fatal - Cannot create socket\n");
-            close(1);
-        }
-
-        if ((TO_SERVER = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
             fprintf(stderr, "Fatal - Cannot create socket\n");
             close(1);
         }
@@ -208,31 +237,38 @@ int main(int argc, char **argv) {
         // 1. join server request
         strncpy(to_send->cmd, CONN_REQUEST, sizeof(CONN_REQUEST));
         strncpy(to_send->content, NAME, sizeof(NAME));
-        printf("Name sent to server: %s\n", to_send->content);
+        debug("Name sent to server: %s\n", to_send->content);
         write(FROM_SERVER, to_send, sizeof(message));
         read(FROM_SERVER, &to_send->remote_client_id, sizeof(int));
-        printf("Received from server: %d\n", to_send->remote_client_id);
+        debug("Received from server: %d\n", to_send->remote_client_id);
 
         // let us assume that you are creating a room here
         
-        if (ROOM_NO) { // join a given room
+        if (ROOM_NO != -1) { // join a given room
             // TODO join transmision protocol
+            me->room = ROOM_NO;
+            strncpy(to_send->cmd, "join", 5);
+            to_send->to_distribute = 1;
+            sprintf(to_send->content, "%d", ROOM_NO);
+            debug("command sent: %s\n", to_send->cmd);
+            send_to_server(to_send, sizeof(message));
+            char *buf = malloc(20480);
+            read(FROM_SERVER, buf, 20480);
+            B = chararr2tbuf(buf);
+            read(FROM_SERVER, &me->room_id, sizeof(int));
+            to_send->local_client_id = me->room_id;
             sprintf(welcome_msg, "<SERVER> You have just joined room %d", me->room);
         }
         else { // create a room
             strncpy(to_send->cmd, "new", 4);
-            printf("command sent: %s\n", to_send->cmd);
-            if (connect(TO_SERVER, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-                fprintf(stderr, "Fatal - Connection to server failed when creating room\n");
-                close(1);
-            }
-            write(TO_SERVER, to_send, sizeof(message));
+            debug("command sent: %s\n", to_send->cmd);
+            send_to_server(to_send, sizeof(message));
             read(FROM_SERVER, &ROOM_NO, sizeof(int));
             to_send->local_client_id = 0; // create a room = 0
             me->room = ROOM_NO;
             me->room_id = 0;
             strncpy(usernames[me->room_id], NAME, sizeof(NAME));
-            printf("recv from server: in room %d\n", me->room);
+            debug("recv from server: in room %d\n", me->room);
             sprintf(welcome_msg, "<SERVER> You are now the owner of %d", me->room);
         }
     }
@@ -251,7 +287,7 @@ int main(int argc, char **argv) {
     int begx = getbegx(mainwin);
     int begy = getbegy(mainwin);
 
-    printf("%d, %d, %d, %d\n", ncols, nlines, begx, begy);
+    debug("%d, %d, %d, %d\n", ncols, nlines, begx, begy);
 
     WINDOW *canvas = subwin(mainwin,
                             nlines - 2, // save 2 lines for bottom status
@@ -268,76 +304,36 @@ int main(int argc, char **argv) {
     render_string(chatbar, welcome_msg);
     render_botbar(botbar);
 
-    printf("setup done\n");
+    debug("setup done\n");
 
     // setup the select program
     char c[3];
-    
+    fd_set readfds, current;
+
+    FD_ZERO(&readfds);
+    FD_ZERO(&current);
+
+    FD_SET(STDIN_FILENO, &readfds);
+    FD_SET(FROM_SERVER, &readfds);
+   
     while (1) {
-        render_tbuf(B, canvas);
-        fd_set readfds;
+        if (!DEBUG) {
+            render_tbuf(B, canvas);
+        }
 
-        FD_ZERO(&readfds);
-        FD_SET(STDIN_FILENO, &readfds);
-        FD_SET(FROM_SERVER, &readfds);
+        current = readfds;
 
-        if (select(2, &readfds, NULL, NULL, NULL) < 0) {
+        debug("BEFORE SELECT\n");
+
+        if (select(FROM_SERVER + 1, &current, NULL, NULL, NULL) < 0) {
             fprintf(stderr, "Error %d: %s", errno, strerror(errno));
         }
 
-        if (FD_ISSET(STDIN_FILENO, &readfds)) { // reading from stdin
-            read(STDIN_FILENO, &c, 1);
+        debug("HELLO!\n");
 
-            if (c[0] == 12) { // ^L --> redraw
-                wclear(mainwin);
-                render_topbar(topbar);
-                render_string(chatbar, "");
-                render_tbuf(B, canvas);
-                wrefresh(mainwin);
-            }
-
-            else { // these will be sent
-                strncpy(to_send->cmd, "edit", 5);
-
-                if (c[0] == 27) {
-                    read(STDIN_FILENO, &c[1], 2);
-                    switch (c[2]) {
-                        case 'C': // move cursor right
-                            backward_char(B, me->room_id);
-                            break;
-
-                        case 'D':
-                            forward_char(B, me->room_id);
-                            break;
-                    }
-                    memcpy(to_send->content, c, 3);
-                }
-
-                else if (c[0] == 24) { // ^X --> exit
-                    break; // exit out of the listening loop
-                }
-
-                else if (c[0] == 127) { // backspace
-                    delete_char(B, me->room_id);
-                    memcpy(to_send->content, c, 3);
-                }
-
-                else if (0 < c[0] && c[0] < 127) { // other characters
-                    insert_char(B, c[0], me->room_id);
-                    memcpy(to_send->content, c, 3);
-                }
-
-                if (connect(TO_SERVER, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-                    fprintf(stderr, "Fatal - Connection to server failed when creating room\n");
-                    close(1);
-                }
-
-                write(TO_SERVER, to_send, sizeof(message));
-            }
-        }
-
-        else if (FD_ISSET(FROM_SERVER, &readfds)) { // receive msg from server
+        if (FD_ISSET(FROM_SERVER, &current)) { // receive msg from server
             read(FROM_SERVER, received, sizeof(message));
+            debug("MSG FROM SERVER: %s\n", received->cmd);
             int c_user = received->local_client_id;
 
             if (strstr(received->cmd, "chat")) { // this is a chat command
@@ -359,6 +355,7 @@ int main(int argc, char **argv) {
             }
 
             if (strstr(received->cmd, "join")) { // if new user joins
+                debug("THIS IS A JOIN REQUEST\n");
                 strncpy(usernames[received->local_client_id], received->content, 16);
                 time_t t;
                 struct tm *tinfo;
@@ -412,9 +409,12 @@ int main(int argc, char **argv) {
             }
 
             if (strstr(received->cmd, BUF_REQUEST)) { // you are the owner and the server asked you for the buffer
+                debug("HELLO I GOTCHU\n");
                 //assert(me->room_id == 0); // i should be the owner
                 char *buf = tbuf2chararr(B);
+                debug("conversion done\n");
                 write(FROM_SERVER, buf, 20480); // only except to the RO rule
+                debug("Wrote to server\n");
             }
 
             if (strstr(received->cmd, "edit")) {
@@ -441,16 +441,58 @@ int main(int argc, char **argv) {
                 }
             }
         }
+
+        if (FD_ISSET(STDIN_FILENO, &current)) { // reading from stdin
+            read(STDIN_FILENO, &c, 1);
+
+            if (c[0] == 12) { // ^L --> redraw
+                wclear(mainwin);
+                render_topbar(topbar);
+                render_string(chatbar, "");
+                render_tbuf(B, canvas);
+                wrefresh(mainwin);
+            }
+
+            else { // these will be sent
+                strncpy(to_send->cmd, "edit", 5);
+
+                if (c[0] == 27) {
+                    read(STDIN_FILENO, &c[1], 2);
+                    switch (c[2]) {
+                        case 'C': // move cursor right
+                            backward_char(B, me->room_id);
+                            break;
+
+                        case 'D':
+                            forward_char(B, me->room_id);
+                            break;
+                    }
+                    memcpy(to_send->content, c, 3);
+                }
+
+                else if (c[0] == 24) { // ^X --> exit
+                    break; // exit out of the listening loop
+                }
+
+                else if (c[0] == 127) { // backspace
+                    delete_char(B, me->room_id);
+                    memcpy(to_send->content, c, 3);
+                }
+
+                else if (0 < c[0] && c[0] < 127) { // other characters
+                    insert_char(B, c[0], me->room_id);
+                    memcpy(to_send->content, c, 3);
+                }
+
+                send_to_server(to_send, sizeof(message));
+            }
+        }
+
     }
 
     if (CONN) { // send off closing request
         strncpy(to_send->cmd, "exit", 5);
-        if (connect(TO_SERVER, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-            fprintf(stderr, "Fatal - Connection to server failed when creating room\n");
-            close(1);
-        }
-
-        write(TO_SERVER, to_send, sizeof(message));
+        send_to_server(to_send, sizeof(message));
     }
 
     curs_set(vis);

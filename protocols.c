@@ -77,9 +77,7 @@ int join_room(int id, subserver *room) {
     }
 }
 
-/* distribute: sends the incoming message across a list of user_ids
- * TODO long description
- */
+/* distribute: sends the incoming message across a list of user_ids */
 void distribute (int user_ids[], int sz, client *users_list[], message incoming) {
     int i;
     for (i = 0 ; i < sz ; i++) {

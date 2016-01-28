@@ -7,7 +7,7 @@
 #define MAX_SUBSERVER_COUNT 100 // maximum number of subservers (chat/co-editing rooms the server can handle)
 #define MAX_CLIENT_COUNT 500 // maximum number of client connections
 
-#define CLIENT_PORT 9009
+#define CLIENT_PORT 9002
 
 #define CONN_REQUEST "connreq"
 #define SERVER_EXIT "exitserv"
