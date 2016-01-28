@@ -26,4 +26,6 @@ void tbuf_forward(tbuf tb, int user);           // Moves the current to the righ
 void tbuf_backward(tbuf tb, int user);          // Moves the current to the left (start)
 void tbuf_delete_current(tbuf tb, int user);    // Removes the current node from list
 void free_tbuf(tbuf tb);                        // Frees all memory associated with a single tbuf node
+char *tbuf2chararr(tbuf tb);                    // Converts a tbuf to char*
+tbuf chararr2tbuf(char *s);                     // Converts a char* to tbuf
 #endif

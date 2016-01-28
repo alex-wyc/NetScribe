@@ -10,6 +10,7 @@
 #include <assert.h>
 #include "gap_buffer.h"
 #include "text_buffer.h"
+#include "editor_backend.h"
 
 /*
  * Checks if text buffer is a well-formed doubly linked list
@@ -132,5 +133,31 @@ void free_tbuf(tbuf tb) {
     }
     free(tb->end);
     tb->end = NULL;
+}
+
+char *tbuf2chararr(tbuf tb) {
+    char *buff = calloc(20480, sizeof(char));
+    int count = 0;
+    int i;
+    dll tmp = tb->start->next;
+    while (tmp != tb->end) {
+        for (i = 0; i < 16; i++) {
+            if (tmp->data->buffer[i][0]) {
+                buff[count++] = tmp->data->buffer[i][0];
+            }
+        }
+    }
+    buff[count] = '\0';
+    return buff;
+}
+
+tbuf chararr2tbuf(char *s) {
+    tbuf retval = new_tbuf();
+    int i = 0;
+    while (s[i]) {
+        insert_char(retval, s[i], 0);
+    }
+    retval->current[0] = retval->current[1];
+    return retval;
 }
 
