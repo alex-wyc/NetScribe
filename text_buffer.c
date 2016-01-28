@@ -165,6 +165,7 @@ tbuf chararr2tbuf(char *s) {
     int i = 0;
     while (s[i]) {
         insert_char(retval, s[i], 0);
+        i++;
     }
     retval->current[0] = retval->current[1];
     return retval;
