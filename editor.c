@@ -141,7 +141,9 @@ void render_string(WINDOW *w, char *str) {
     wmove(w, 0, 1);
     wattron(w, WA_REVERSE);
     waddstr(w, str);
+    //printf("%s", str);
     wattroff(w, WA_REVERSE);
+    wrefresh(w);
 }
 
 /* renders the header for the text editor */
@@ -207,6 +209,7 @@ int main(int argc, char **argv) {
 
                     case 'l': // local use
                         CONN = 0;
+                        me->room_id = 0;
                         break;
 
                     case 'j': // not creating a room, but joining
@@ -321,6 +324,7 @@ int main(int argc, char **argv) {
     render_topbar(topbar);
     render_string(chatbar, welcome_msg);
     render_botbar(botbar);
+    wrefresh(mainwin);
 
     debug("setup done\n");
 
@@ -339,7 +343,7 @@ int main(int argc, char **argv) {
 
     while (1) {
         if (!DEBUG) {
-            render_tbuf(B, canvas);
+            render_tbuf(B, canvas); // FIXME OVERWRITING STUFF
         }
 
         current = readfds;
@@ -489,6 +493,7 @@ int main(int argc, char **argv) {
                 }
 
                 else if (0 < c[0] && c[0] < 127) { // other characters
+                    printf("%c\n", c[0]);
                     insert_char(B, c[0], me->room_id);
                     memcpy(to_send->content, c, 3);
                 }
