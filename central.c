@@ -60,7 +60,6 @@
 int DEBUG = 0; // print statements, off by default
 
 const char *help = ""; // help doc string TODO
-const char buffer_request[] = "bufferreq";
 
 /* GLOBAL VARIABLES ***********************************************************/
 client *users_list[MAX_CLIENT_COUNT] = {0};
@@ -157,9 +156,12 @@ void handle_client (int socket){
                 strncpy(incoming->content, sender->name, 16); // modify before distribution
                 sender->room = atoi(incoming->content);
                 int room_owner_fd = users_list[rooms_list[sender->room]->user_ids[0]]->socket_id;
-                write(room_owner_fd, buffer_request, sizeof(buffer_request)); // write to 0 index to get gbuf
-                //read() // read to get gbuf
-                //write() // write to new connection to get gbuf
+                message *tmp = (message *)malloc(sizeof(message));
+                strncpy(tmp->cmd, BUF_REQUEST, sizeof(BUF_REQUEST));
+                write(room_owner_fd, tmp, sizeof(message)); // write to 0 index to get gbuf
+                char *buf = malloc(20480); // get array from owner
+                read(room_owner_fd, buf, 20480); // read to get gbuf
+                write(sender->socket_id, buf, 20480); // write to new connection to get gbuf
                 close(socket);
                 //return;
             }
@@ -167,7 +169,21 @@ void handle_client (int socket){
             if (strstr(incoming->cmd, "exit")) {
                 debug("client %d has exited", incoming->remote_client_id);
                 if (incoming->local_client_id == 0) { // if this is the owner of the room
-                    f
+                    int local_id = users_list[incoming->remote_client_id]->room;
+                    strncpy(incoming->cmd, SERVER_EXIT, sizeof(SERVER_EXIT)); // bai
+                    // kill off all connected users as well
+                    for (c = 0 ; c < MAX_CLIENT_PER_ROOM ; c++) {
+                        if (local->user_ids[c] != -1) {
+                            write(users_list[local->user_ids[c]]->socket_id, incoming, sizeof(message));
+                            close(users_list[local->user_ids[c]]->socket_id); // close off connections
+                            free(users_list[local->user_ids[c]]); // free the struct
+                            users_list[local->user_ids[c]] = 0; // zero the pointer
+                        }
+                    }
+                    free(local); // destroy the room
+                    rooms_list[local_id] = 0; // reset to NULL
+                    close(socket);
+                    return;
                 }
                 local->user_ids[incoming->local_client_id] = -1; // remove from subserv
                 close(users_list[incoming->remote_client_id]->socket_id); // remove the fd
@@ -176,7 +192,6 @@ void handle_client (int socket){
                 close(socket);
                 //return;
             }
-
             distribute(local->user_ids, MAX_CLIENT_PER_ROOM, users_list, *incoming);
         }
 

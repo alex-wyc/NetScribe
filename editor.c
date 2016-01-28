@@ -217,7 +217,7 @@ int main(int argc, char **argv) {
         
         if (ROOM_NO) { // join a given room
             // TODO join transmision protocol
-            sprintf(welcome_msg, "<SERVER> You have just joined room %d", me->room_id);
+            sprintf(welcome_msg, "<SERVER> You have just joined room %d", me->room);
         }
         else { // create a room
             strncpy(to_send->cmd, "new", 4);
@@ -233,7 +233,7 @@ int main(int argc, char **argv) {
             me->room_id = 0;
             strncpy(usernames[me->room_id], NAME, sizeof(NAME));
             printf("recv from server: in room %d\n", me->room);
-            sprintf(welcome_msg, "<SERVER> You are now the owner of %d", me->room_id);
+            sprintf(welcome_msg, "<SERVER> You are now the owner of %d", me->room);
         }
     }
 
@@ -374,7 +374,6 @@ int main(int argc, char **argv) {
                         usernames[received->local_client_id]);
 
                 render_string(chatbar, to_put_up);
-                // TODO -- set cursor
             }
 
             if (strstr(received->cmd, "exit")) { // if user exits
@@ -393,7 +392,6 @@ int main(int argc, char **argv) {
 
                 render_string(chatbar, to_put_up);
                 memset(usernames[received->local_client_id], 0, sizeof(usernames[received->local_client_id]));
-                // TODO -- remove cursor
             }
 
             if (strstr(received->cmd, SERVER_EXIT)) { // server died :(
@@ -411,6 +409,12 @@ int main(int argc, char **argv) {
 
                 render_string(chatbar, to_put_up);              
                 CONN = false;
+            }
+
+            if (strstr(received->cmd, BUF_REQUEST)) { // you are the owner and the server asked you for the buffer
+                //assert(me->room_id == 0); // i should be the owner
+                char *buf = tbuf2chararr(B);
+                write(FROM_SERVER, buf, 20480); // only except to the RO rule
             }
 
             if (strstr(received->cmd, "edit")) {
@@ -440,7 +444,13 @@ int main(int argc, char **argv) {
     }
 
     if (CONN) { // send off closing request
-        // TODO send closing request to server
+        strncpy(to_send->cmd, "exit", 5);
+        if (connect(TO_SERVER, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+            fprintf(stderr, "Fatal - Connection to server failed when creating room\n");
+            close(1);
+        }
+
+        write(TO_SERVER, to_send, sizeof(message));
     }
 
     curs_set(vis);

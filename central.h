@@ -11,6 +11,7 @@
 
 #define CONN_REQUEST "connreq"
 #define SERVER_EXIT "exitserv"
+#define BUF_REQUEST "bufferreq"
 
 /* DATATYPE DEFINITIONS *******************************************************/
 
