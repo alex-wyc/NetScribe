@@ -224,6 +224,7 @@ tbuf read_from_file(char *filename) {
     tbuf retval = new_tbuf();
     int i; for (i = 0; i < nbytes; i++) {
         insert_char(retval, tmp[i], 0);
+        printf("%c", tmp[i]);
     }
     retval->current[0] = retval->current[1];
     close(INFILE);
