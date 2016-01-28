@@ -154,6 +154,7 @@ char *tbuf2chararr(tbuf tb) {
                 buff[count++] = tmp->data->buffer[i][0];
             }
         }
+        tmp = tmp->next;
     }
     buff[count] = '\0';
     return buff;
