@@ -18,9 +18,14 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <curses.h>
 #include <string.h>
-#include <socket.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "gap_buffer.h"
 #include "text_buffer.h"
@@ -30,16 +35,6 @@
 /* server side definitions */
 #define SERVER_ADDR "127.0.0.1"
 
-/* ncurses definitions/macro hacks */
-#define getbegx(_win, _x) { \
-    int _y;                 \
-    getbegxy(_win, _x, _y); \
-}
-
-#define getmaxx(_win, _x) { \
-    int _y;                 \
-    getmaxxy(_win, _x, _y); \
-}
 
 #define highlight(x) x | A_STANDOUT
 
@@ -98,41 +93,88 @@ void render_tbuf(tbuf B, WINDOW *w) {
 /* renders a string within a WINDOW */
 void render_string(WINDOW *w, char *str) {
     werase(w);
-    int i, f;
-    getbegx(w, i);
-    getmaxx(w, f);
+    int i;
     // first clear the bar
-    for (; i < f ; i++) {
+    for (i = getbegx(w); i < getmaxx(w) ; i++) {
         waddch(w, highlight(' '));
     }
 
     // next add the description
     wmove(w, 0, 1);
-    wattron(WA_REVERSE);
+    wattron(w, WA_REVERSE);
     waddstr(w, str);
-    wattroff(WA_REVERSE);
+    wattroff(w, WA_REVERSE);
 }
 
 /* renders the header for the text editor */
 void render_topbar(WINDOW *w) {
-    render_string(w, "NetScribe, the terminal based cross-network editor -- ^X to exit")
+    render_string(w, "NetScribe, the terminal based cross-network editor -- ^X to exit, ^L to refresh the page");
 }
 
 void render_botbar(WINDOW *w) {
     werase(w);
-    int i, f;
-    getbegx(w, i);
-    getmaxx(w, f);
+    int i; 
     // first clear the bar
-    for (; i < f ; i++) {
+    for (i = getbegx(w); i < getmaxx(w) ; i++) {
         waddch(w, highlight(' '));
     }
 }
 
-int establish_connection()
+int main(int argc, char **argv) {
+    message *to_send = (message *)malloc(sizeof(message)); // message struct to talk to server with
+    message *distributed = (message *)malloc(sizeof(message));
+    client *me = (client *)malloc(sizeof(client)); // ME!
 
-int main() {
     // build socket connection
+    int from_server;
+    if ((from_server = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        fprintf(stderr, "Fatal - Cannot create socket\n");
+        close(1);
+    }
+
+    struct sockaddr_in serv_addr;
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(CLIENT_PORT);
+    serv_addr.sin_addr.s_addr = inet_addr(SERVER_ADDR);
+
+    if (connect(from_server, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+        fprintf(stderr, "Fatal - Connection to server failed\n");
+        close(1);
+    }
+
+    // setup terminal args and handshake with server
+    // 1. join server request
+    strncpy(to_send->cmd, CONN_REQUEST, sizeof(CONN_REQUEST));
+    write(from_server, to_send, sizeof(message));
+    read(from_server, me, sizeof(client));
+    to_send->remote_client_id = me->socket_id;
+
+    // let us assume that you are creating a room here
+
+    // setup GUI
     WINDOW *mainwin = initscr();
-    // more stuff blah blah blah
+    cbreak();
+    noecho();
+    keypad(mainwin, true);
+    int vis = curs_set(0);
+
+    int ncols = getmaxx(mainwin);
+    int nlines = getmaxy(mainwin);
+    int begx = getbegx(mainwin);
+    int begy = getbegy(mainwin);
+
+    WINDOW *canvas = subwin(mainwin,
+                            nlines - 2, // save 2 lines for bottom status
+                            ncols, // same as main
+                            begy + 2, // save one line for title and one line for 'chat'
+                            begx);
+
+    WINDOW *topbar = subwin(mainwin, 1, ncols, begy, begx);
+    WINDOW *chatbar = subwin(mainwin, 1, ncols, begy + 1, begx);
+    WINDOW *botbar = subwin(mainwin, 1, ncols, nlines - 2, begx);
+
+    render_topbar(topbar);
+    render_botbar(botbar);
+
+    // setup the select program
 }

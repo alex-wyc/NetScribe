@@ -127,7 +127,7 @@ void handle_client (int socket){
     ret_val = read(socket, incoming, sizeof(message));
     check_error(ret_val);
 
-    if (strncmp(incoming->cmd, CONN_REQUEST, sizeof(CONN_REQUEST)) == 0) { // if this is a conn request
+    if (strstr(incoming->cmd, CONN_REQUEST) == 0) { // if this is a conn request
         for (c = 0 ; c < MAX_CLIENT_COUNT ; c++) {
             if (users_list[c] == 0) {
                 users_list[c] = handshake_join_server(socket, c, incoming);
