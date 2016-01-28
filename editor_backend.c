@@ -228,7 +228,7 @@ tbuf read_from_file(char *filename) {
  * Writes the text in a tbuf to a file
  */
 void write_to_file(tbuf tb, char *filename) {
-    int OUTFILE = open(filename, O_WRONLY);
+    int OUTFILE = open(filename, O_RDONLY | O_WRONLY | O_CREAT | O_TRUNC);
     if (errno) {
         printf("%s\n", strerror(errno));
         return;
