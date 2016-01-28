@@ -118,6 +118,8 @@ gapbuf new_gapbuf(int limit) {
     G->buffer = malloc(limit * sizeof(char*));
     int i; for (i = 0; i < limit; i++) {
         G->buffer[i] = malloc(2 * sizeof(char));
+        G->buffer[i][0] = 0;
+        G->buffer[1][1] = ~0;
     }
     for (i = 0; i < MAX_USERS; i++) {
         G->gap_start[i] = 0;
