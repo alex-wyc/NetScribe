@@ -118,8 +118,11 @@ gapbuf new_gapbuf(int limit) {
     G->buffer = malloc(limit * sizeof(char*));
     int i; for (i = 0; i < limit; i++) {
         G->buffer[i] = malloc(2 * sizeof(char));
+        printf("Allocated memory for buffer elem\n");
         G->buffer[i][0] = 0;
-        G->buffer[1][1] = ~0;
+        printf("Set initial value of %d to 0\n", i);
+        G->buffer[i][1] = ~0;
+        printf("Set initial cursor value of %d to %x\n", i, ~0);
     }
     for (i = 0; i < MAX_USERS; i++) {
         G->gap_start[i] = 0;
