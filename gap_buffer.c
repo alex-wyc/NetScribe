@@ -3,6 +3,7 @@
  *
  * AUTHORS: ETHAN CHENG <elc1798>, SOPHIA ZHENG <sophz55>
  *
+ * ANNOTATED/EDITED/DEBUGGED BY: YICHENG WANG <alex-wyc>
  *
  * Theory:
  *
@@ -56,12 +57,14 @@
  * Checks for certain rules that define a valid buffer
  */
 bool is_gapbuf(gapbuf G) {
-    bool valid = (G != NULL && G->limit > 0);
-    int i; for (i = 0; valid && i < MAX_USERS; i++) {
+    bool valid = (G != NULL && G->limit > 0); // pointer isn't null and limit > 0
+    int i;
+
+    for (i = 0; valid && i < MAX_USERS; i++) { // while it is valid
         valid = valid &&
-            G->gap_start[i] >= 0 &&
-            G->gap_start[i] <= G->gap_end[i] &&
-            G->gap_end[i] <= G->limit;
+                G->gap_start[i] >= 0 && // start cursor for user not negative
+                G->gap_start[i] <= G->gap_end[i] && // start cursor for user less than end cursor for user
+                G->gap_end[i] <= G->limit; // end cursor still within the gap
     }
     return valid;
 }
@@ -72,8 +75,12 @@ bool is_gapbuf(gapbuf G) {
 bool gapbuf_empty(gapbuf G) {
     assert(is_gapbuf(G));
     bool empty = true;
-    int i; for (i = 0; empty && i < MAX_USERS; i++) {
-        empty = empty && G->gap_start[i] == 0 && G->gap_end[i] == G->limit;
+    int i;
+
+    for (i = 0; empty && i < MAX_USERS; i++) {
+        empty = empty &&
+                G->gap_start[i] == 0 && // no character at start
+                G->gap_end[i] == G->limit; // no character at the end
     }
     return empty;
 }
@@ -84,8 +91,11 @@ bool gapbuf_empty(gapbuf G) {
 bool gapbuf_full(gapbuf G) {
     assert(is_gapbuf(G));
     bool full = false;
-    int i; for (i = 0; !full && i < MAX_USERS; i++) {
-        full = full || (G->gap_start[i] == G->gap_end[i]);
+    int i;
+
+    for (i = 0; !full && i < MAX_USERS; i++) {
+        full = full ||
+               (G->gap_start[i] == G->gap_end[i]); // if the beginning of the gap and the end of the gap are the same, then the buffer is full
     }
     return full;
 }
@@ -113,36 +123,41 @@ bool gap_at_right(gapbuf G, int user) {
  */
 gapbuf new_gapbuf(int limit) {
     assert(limit > 0);
-    gapbuf G = malloc(sizeof(struct gap_buffer));
+    gapbuf G = (gapbuf)malloc(sizeof(struct gap_buffer));
     G->limit = limit;
-    G->buffer = malloc(limit * sizeof(char*));
-    int i; for (i = 0; i < limit; i++) {
-        G->buffer[i] = malloc(2 * sizeof(char));
+    G->buffer = calloc(limit, sizeof(char*));
+    int i;
+
+    for (i = 0; i < limit; i++) {
+        G->buffer[i] = malloc(2 * sizeof(char)); // two bytes, [char, user-bit-switch]
         printf("Allocated memory for buffer elem\n");
         G->buffer[i][0] = 0;
         printf("Set initial value of %d to 0\n", i);
-        G->buffer[i][1] = ~0;
+        G->buffer[i][1] = ~0; // 11111111 in binary
+        // initially everyone is on the gap
         printf("Set initial cursor value of %d to %x\n", i, ~0);
     }
+
     for (i = 0; i < MAX_USERS; i++) {
         G->gap_start[i] = 0;
         G->gap_end[i] = limit;
     }
+
     return G;
 }
 
-void remove_user_from(gapbuf G, int user, int index) {
+void remove_user_from(gapbuf G, int user, int index) { // check
     G->buffer[index][1] = G->buffer[index][1] & ~(1 << user);
 }
 
-void add_user_to(gapbuf G, int user, int index) {
+void add_user_to(gapbuf G, int user, int index) { // check
     G->buffer[index][1] = G->buffer[index][1] | (1 << user);
 }
 
 /*
  * Returns true if user has cursor object in index
  */
-bool is_user_in(gapbuf G, int index, int user) {
+bool is_user_in(gapbuf G, int index, int user) { // check
     return (G->buffer[index][1] >> user) & 0x01;
 }
 
@@ -179,9 +194,9 @@ void gapbuf_insert(gapbuf G, char c, int user){
     assert(is_gapbuf(G));
     assert(0 <= user && user < MAX_USERS);
 
-    G->buffer[G->gap_start[user]][0] = c;
-    remove_user_from(G, user, G->gap_start[user]);
-    G->gap_start[user]++;
+    G->buffer[G->gap_start[user]][0] = c; // fill in the gap
+    remove_user_from(G, user, G->gap_start[user]); // lessen the gap for user
+    G->gap_start[user]++; // move the beginning forward
 }
 
 /*
@@ -197,17 +212,18 @@ void gapbuf_delete(gapbuf G, int user){
 }
 
 /*
- * Frees the memory of a gap buffer
+ * Frees the memory of a gap buffer, and returns a NULL pointer
  */
-void free_gapbuf(gapbuf G) {
+gapbuf free_gapbuf(gapbuf G) {
     assert(is_gapbuf(G));
-    int i; for (i = 0; i < G->limit; i++) {
+    int i;
+    for (i = 0; i < G->limit; i++) {
         free(G->buffer[i]);
         G->buffer[i] = NULL;
     }
     free(G->buffer);
     G->buffer = NULL;
     free(G);
-    G = NULL;
+    // G = NULL; <-- cannot just do that lol... pass by value much
+    return NULL;
 }
-

@@ -4,19 +4,21 @@
 #ifndef _TEXT_BUFFER
 #define _TEXT_BUFFER
 
-typedef struct list_node* dll; // dll = doubly linked list
 struct list_node {
     gapbuf data;    /* Gap Buffer of 16 Bytes */
-    dll next;
-    dll prev;
+    struct list_node *next;
+    struct list_node *prev;
 };
 
-typedef struct text_buffer* tbuf;
+typedef struct list_node* dll; // dll = doubly linked list
+
 struct text_buffer {
     dll start;              /* First node, terminal    */
     dll current[MAX_USERS]; /* Current nodes for users */
     dll end;                /* Last node, terminal     */
 };
+
+typedef struct text_buffer* tbuf;
 
 // Yes I am aware that tb is tuberculosis
 bool is_valid_tbuf(tbuf tb);                    // Checks if tbuf is well formed dll

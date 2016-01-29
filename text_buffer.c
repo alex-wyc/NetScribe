@@ -119,7 +119,7 @@ void tbuf_delete_current(tbuf tb, int user) {
         }
     }
 
-    free_gapbuf(to_free->data);
+    to_free->data = free_gapbuf(to_free->data);
     free(to_free);
     to_free = NULL;
 }
@@ -132,7 +132,7 @@ void free_tbuf(tbuf tb) {
     while(tb->current[0]->next != tb->end) {
         tbuf_delete_current(tb, 0);
     }
-    free_gapbuf(tb->current[0]->data);
+    tb->current[0]->data = free_gapbuf(tb->current[0]->data);
     free(tb->start);
     tb->start = NULL;
     int i; for (i = 0; i < MAX_USERS; i++) {

@@ -6,9 +6,9 @@
 
 struct gap_buffer {
     int limit;      // Maximum capacity of a single buffer segment
-    unsigned char** buffer;
-    int gap_start[MAX_USERS];
-    int gap_end[MAX_USERS];
+    unsigned char** buffer; // array of [char, user-bit-switch] ordered by index
+    int gap_start[MAX_USERS]; // list of starting positions of the gap, here the index is an integer, the local_id of the user
+    int gap_end[MAX_USERS]; // list of ending positions of the gap, same here
 };
 typedef struct gap_buffer* gapbuf;
 
@@ -23,5 +23,5 @@ void gapbuf_forward(gapbuf G, int user);        // Moves gapbuf for user forward
 void gapbuf_backward(gapbuf G, int user);       // Moves gapbuf for user backward
 void gapbuf_insert(gapbuf G, char c, int user); // Inserts char c before the gap for user
 void gapbuf_delete(gapbuf G, int user);         // Deletes the character before the gap for user
-void free_gapbuf(gapbuf G);                     // Frees a gap buffer
+gapbuf free_gapbuf(gapbuf G);                     // Frees a gap buffer
 #endif
