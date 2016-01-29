@@ -280,9 +280,10 @@ int main(int argc, char **argv) {
             sprintf(to_send->content, "%d", ROOM_NO);
             debug("command sent: %s\n", to_send->cmd);
             send_to_server(to_send, sizeof(message));
-            char *buf = malloc(20480);
-            read(FROM_SERVER, buf, 20480);
-            B = chararr2tbuf(buf);
+            room_state *current_room = (room_state *)malloc(sizeof(room_state));
+            read(FROM_SERVER, current_room, sizeof(room_state));
+            B = chararr2tbuf(current_room->buf);
+            memcpy(usernames, current_room->usernames, sizeof(usernames));
             read(FROM_SERVER, &me->room_id, sizeof(int));
             to_send->local_client_id = me->room_id;
             strncpy(usernames[me->room_id], NAME, sizeof(NAME));
@@ -437,9 +438,11 @@ int main(int argc, char **argv) {
             if (strstr(received->cmd, BUF_REQUEST)) { // you are the owner and the server asked you for the buffer
                 debug("HELLO I GOTCHU\n");
                 //assert(me->room_id == 0); // i should be the owner
-                char *buf = tbuf2chararr(B);
+                room_state *current_state = (room_state *)malloc(sizeof(room_state));
+                strncpy(current_state->buf, tbuf2chararr(B), 20480);
+                memcpy(current_state->usernames, usernames, sizeof(usernames));
                 debug("conversion done\n");
-                write(FROM_SERVER, buf, 20480); // only except to the RO rule
+                write(FROM_SERVER, current_state, sizeof(room_state)); // only except to the RO rule
                 debug("Wrote to server\n");
             }
 

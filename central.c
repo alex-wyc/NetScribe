@@ -166,10 +166,11 @@ void handle_client (int socket){
                         rooms_list[sender->room]->user_ids[0],
                         users_list[rooms_list[sender->room]->user_ids[0]]->name,
                         room_owner_fd);
-                char *buf = malloc(20480); // get array from owner
-                read(room_owner_fd, buf, 20480); // read to get gbuf
+                room_state *request = (room_state *)malloc(sizeof(room_state));
+                debug("sizeof room_state: %d\n", sizeof(room_state));
+                read(room_owner_fd, request, sizeof(room_state)); // read to get gbuf
                 debug("got buffer\n");
-                write(sender->socket_id, buf, 20480); // write to new connection to get gbuf
+                write(sender->socket_id, request, sizeof(room_state)); // write to new connection to get gbuf
                 write(sender->socket_id, &sender->room_id, sizeof(int));
                 debug("sent buffer to new client\n");
                 close(socket);

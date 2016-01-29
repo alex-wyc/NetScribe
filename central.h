@@ -34,6 +34,11 @@ typedef struct message {
     char content[256]; // the content of the command
 } message;
 
+typedef struct room_state { // passes an entire room for joining
+    char buf[20480]; // buffer
+    char usernames[MAX_CLIENT_PER_ROOM][16];
+} room_state;
+
 /* FUNCTION HEADERS ***********************************************************/
 void debug(char *statement, ...);
 void check_error(int ret_val);
