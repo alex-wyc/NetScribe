@@ -58,6 +58,9 @@ struct sockaddr_in serv_addr;
 int DEBUG = 0;
 int SERVER_DIED = 0; // set to 1 if the client side is exiting because the server died
 message *to_send;
+char filename[256];
+char msg[256];
+int msg_i;
 
 /* debug: checks if debug is on, if so, print the statement, otherwise, do
  * nothing
@@ -221,7 +224,9 @@ int main(int argc, char **argv) {
                         break;
                 }
             }
+
             else if(i > 0) {
+                strncpy(filename, argv[i], sizeof(filename));
                 B = read_from_file(argv[i]);
                 debug("reading done (%s)\n", argv[i]);
             }
@@ -280,6 +285,7 @@ int main(int argc, char **argv) {
             B = chararr2tbuf(buf);
             read(FROM_SERVER, &me->room_id, sizeof(int));
             to_send->local_client_id = me->room_id;
+            strncpy(usernames[me->room_id], NAME, sizeof(NAME));
             sprintf(welcome_msg, "<SERVER> You have just joined room %d", me->room);
         }
         else { // create a room
@@ -318,7 +324,7 @@ int main(int argc, char **argv) {
     debug("%d, %d, %d, %d\n", ncols, nlines, begx, begy);
 
     WINDOW *canvas = subwin(mainwin,
-                            nlines - 2, // save 2 lines for bottom status
+                            nlines - 4, // save 2 lines for bottom status
                             ncols, // same as main
                             begy + 2, // save one line for title and one line for 'chat'
                             begx);
@@ -331,7 +337,7 @@ int main(int argc, char **argv) {
     render_topbar(topbar);
     render_string(chatbar, welcome_msg);
     render_botbar(botbar);
-    //wrefresh(mainwin);
+    wrefresh(mainwin);
 
     debug("setup done\n");
 
@@ -465,47 +471,87 @@ int main(int argc, char **argv) {
         if (FD_ISSET(STDIN_FILENO, &current)) { // reading from stdin
             read(STDIN_FILENO, &c, 1);
 
-            if (c[0] == 12) { // ^L --> redraw
-                wclear(mainwin);
-                render_topbar(topbar);
-                render_string(chatbar, "");
-                render_tbuf(B, canvas);
-                wrefresh(mainwin);
+            if (c[0] == 24) { // ^X --> exit
+                break; // exit out of the listening loop
             }
 
-            else { // these will be sent
-                strncpy(to_send->cmd, "edit", 5);
-
-                if (c[0] == 27) {
-                    read(STDIN_FILENO, &c[1], 2);
-                    switch (c[2]) {
-                        case 'C': // move cursor right
-                            backward_char(B, me->room_id);
-                            break;
-
-                        case 'D':
-                            forward_char(B, me->room_id);
-                            break;
+            switch (mode) {
+                case EDIT_MODE:
+                    if (c[0] == 12) { // ^L --> redraw
+                        wclear(mainwin);
+                        render_topbar(topbar);
+                        render_string(chatbar, "");
+                        render_tbuf(B, canvas);
+                        wrefresh(mainwin);
                     }
-                    memcpy(to_send->content, c, 3);
-                }
 
-                else if (c[0] == 24) { // ^X --> exit
-                    break; // exit out of the listening loop
-                }
+                    else if (c[0] == 15) { // ^O --> saving mode
+                        mode = SAVE_MODE;
+                    }
 
-                else if (c[0] == 127) { // backspace
-                    delete_char(B, me->room_id);
-                    memcpy(to_send->content, c, 3);
-                }
+                    else if (c[0] == 8) { // ^H --> chat
+                        mode = CHAT_MODE;
+                        werase(inputbar);
+                        wmove(inputbar, 0, 1);
+                        waddstr(inputbar, "Chat (press enter to send): ");
+                        wrefresh(inputbar);
+                        msg_i = 0;
+                    }
 
-                else if (0 < c[0] && c[0] < 127) { // other characters
-                    printf("%c\n", c[0]);
-                    insert_char(B, c[0], me->room_id);
-                    memcpy(to_send->content, c, 3);
-                }
+                    else { // these will be sent
+                        strncpy(to_send->cmd, "edit", 5);
 
-                send_to_server(to_send, sizeof(message));
+                        if (c[0] == 27) {
+                            read(STDIN_FILENO, &c[1], 2);
+                            switch (c[2]) {
+                                case 'C': // move cursor right
+                                    backward_char(B, me->room_id);
+                                    break;
+
+                                case 'D':
+                                    forward_char(B, me->room_id);
+                                    break;
+                            }
+                            memcpy(to_send->content, c, 3);
+                        }
+
+                        else if (c[0] == 127) { // backspace
+                            delete_char(B, me->room_id);
+                            memcpy(to_send->content, c, 3);
+                        }
+
+                        else if (0 < c[0] && c[0] < 127) { // other characters
+                            printf("%c\n", c[0]);
+                            insert_char(B, c[0], me->room_id);
+                            memcpy(to_send->content, c, 3);
+                        }
+
+                        send_to_server(to_send, sizeof(message));
+                    }
+
+                    break;
+
+                case CHAT_MODE: // when user is inputing things for the chat
+                    if (c[0] == 13) { // enter
+                        msg[msg_i] = 0; // null terminator
+                        strncpy(to_send->cmd, "chat", 5);
+                        strncpy(to_send->content, msg, sizeof(to_send->content));
+                        send_to_server(to_send, sizeof(message));
+                        werase(inputbar);
+                        wrefresh(inputbar);
+                        mode = EDIT_MODE;
+                    }
+
+                    else if (0 < c[0] && c[0] < 127) { // other chars
+                        msg[msg_i] = c[0];
+                        msg_i++;
+                        waddch(inputbar, c[0]);
+                        wrefresh(inputbar);
+                    }
+                    break;
+
+                case SAVE_MODE: // when user is typing in the to-save filename
+                    break;
             }
         }
 

@@ -7,6 +7,7 @@ project will allow many people to collaborate on the same piece of code at once
 with ease.
 
 ## UI
+![GUI](GUI.png)
 The user interface looks somewhat like nano, with a title bar on top, a
 chat/status bar below the title bar to display incoming chat messages and system
 informations. Below that is the buffer for editing, below that is the

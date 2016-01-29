@@ -154,8 +154,10 @@ void handle_client (int socket){
                 sender->room = atoi(incoming->content);
                 debug("client %d (%s) asked to join room %d\n", incoming->remote_client_id, sender->name, sender->room);
                 sender->room_id = join_room(incoming->remote_client_id, rooms_list[sender->room]);
+                debug("%d\n", rooms_list[sender->room]->user_ids[sender->room_id]);
                 incoming->local_client_id = sender->room_id; // modify before distribution
                 strncpy(incoming->content, sender->name, 16); // modify before distribution
+                printf("ready to distribute %s's join request\n", incoming->content);
                 int room_owner_fd = users_list[rooms_list[sender->room]->user_ids[0]]->socket_id;
                 message *tmp = (message *)malloc(sizeof(message));
                 strncpy(tmp->cmd, BUF_REQUEST, sizeof(BUF_REQUEST));
